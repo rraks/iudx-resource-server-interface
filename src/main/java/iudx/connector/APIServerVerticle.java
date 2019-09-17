@@ -1,7 +1,12 @@
 package iudx.connector;
 
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.logging.Logger;
+
+import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
@@ -25,6 +30,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	private final String basepath = "/resource-server/pscdcl/v1";
 	private String api;
 	private HashMap<String, String> upstream;
+	int state;
+	JsonObject metrics;
 
 	@Override
 	public void start() {
@@ -57,6 +64,9 @@ public class APIServerVerticle extends AbstractVerticle {
 		requested_data = routingContext.getBodyAsJson();
 		api = "search";
 
+		metrics = new JsonObject();
+		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		
 		switch (decoderequest(requested_data)) {
 
 		case 0:
@@ -66,30 +76,31 @@ public class APIServerVerticle extends AbstractVerticle {
 
 			if (requested_data.getString("options").contains("latest")) {
 				logger.info("case-1: latest data for an item in group");
-				options.addHeader("state", "1");
+				options.addHeader("state", Integer.toString(state));
 				options.addHeader("options", "latest");
-				publishEvent(requested_data, options, response);
+				publishEvent(requested_data, options, response, metrics);
 			}
 
 			else if (requested_data.getString("options").contains("status")) {
 				logger.info("case-1: status for an item in group");
-				options.addHeader("state", "1");
+				options.addHeader("state", Integer.toString(state));
 				options.addHeader("options", "status");
-				publishEvent(requested_data, options, response);
+				publishEvent(requested_data, options, response, metrics);			
 			}
 
+			
 			break;
 
 		case 2:
 			logger.info("case-2: latest data for all the items in group");
-			options.addHeader("state", "2");
-			publishEvent(requested_data, options, response);
+			options.addHeader("state", Integer.toString(state));
+			publishEvent(requested_data, options, response, metrics);
 			break;
 
 		case 3:
 			logger.info("case-3: time-series data for an item in group");
-			options.addHeader("state", "3");
-			publishEvent(requested_data, options, response);
+			options.addHeader("state", Integer.toString(state));
+			publishEvent(requested_data, options, response, metrics);
 			break;
 
 		case 4:
@@ -97,8 +108,8 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 		case 5:
 			logger.info("case-5: geo search for an item group");
-			options.addHeader("state", "5");
-			publishEvent(requested_data, options, response);
+			options.addHeader("state", Integer.toString(state));
+			publishEvent(requested_data, options, response, metrics);
 			break;			
 			
 		}
@@ -111,32 +122,35 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
 		api = "count";
-
+		
+		metrics = new JsonObject();
+		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		
 		switch (decoderequest(requested_data)) {
 
 		case 4:
 			logger.info("case-4: count for time-series data for an item in group");
-			options.addHeader("state", "4");
+			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
-			publishEvent(requested_data, options, response);
+			publishEvent(requested_data, options, response, metrics);
 			break;
 			
 		case 6:
 			logger.info("case-6: count for geo search for an item group");
-			options.addHeader("state", "6");
+			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
-			publishEvent(requested_data, options, response);
+			publishEvent(requested_data, options, response, metrics);
 			break;
 		}
 	}
 	
 	private int decoderequest(JsonObject requested_data) {
 
-		int state = 0;
+		state = 0;
 
 		if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id")) {
-			state = 1;
+			state = 1; 
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
@@ -172,19 +186,64 @@ public class APIServerVerticle extends AbstractVerticle {
 		return state;
 	}
 	
-	private void publishEvent(JsonObject requested_data, DeliveryOptions options, HttpServerResponse response ) {
+	private void publishEvent(JsonObject requested_data, DeliveryOptions options, HttpServerResponse response, JsonObject metrics ) {
 		vertx.eventBus().send("search", requested_data, options, replyHandler -> {
 			if (replyHandler.succeeded()) {
 				handle200(response, replyHandler);
+				updatemetrics(requested_data, metrics);
 			} else {
 				response.setStatusCode(400).end();
 			}
 		});
 	}
-	
+
 	private void handle200(HttpServerResponse response, AsyncResult<Message<Object>> replyHandler) {
 		response.setStatusCode(200).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json")
 				.end(replyHandler.result().body().toString());
 	}
 
+	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
+
+		metrics.put("api", api);
+		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
+
+		if (state != 5 || state != 6) 
+		{
+			metrics.put("resource-id", requested_data.getString("resource-id"));
+		}
+
+		if (state == 1) 
+		{
+
+			metrics.put("options", requested_data.getString("options"));
+		}
+
+		else if (state == 3 || state == 4) 
+		{
+
+			metrics.put("TRelation", requested_data.getString("TRelation"));
+		}
+
+		else if (state == 5 || state == 6) 
+		{
+
+			metrics.put("GRelation", "circle");
+
+		}
+
+		System.out.println(metrics);
+		
+		vertx.eventBus().send("metrics", metrics, replyHandler -> {
+			
+			if (replyHandler.succeeded()) 
+			{
+				logger.info("SUCCESS");
+			} 
+			
+			else 
+			{
+				logger.info("FAILED");
+			}
+		});
+	}
 }
