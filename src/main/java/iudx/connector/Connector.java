@@ -30,6 +30,14 @@ public class Connector {
 						logger.info("Unable to start Search Verticle " + event.cause());
 					}
 				});
-
+		
+		vertx.deployVerticle(MetricsVerticle.class.getName(),
+				new DeploymentOptions().setWorker(true).setInstances(1), event -> {
+					if (event.succeeded()) {
+						logger.info("MetricsVerticle started!");
+					} else {
+						logger.info("Unable to start MetricsVerticle " + event.cause());
+					}
+				});
 	}
 }
