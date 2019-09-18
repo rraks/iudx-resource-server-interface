@@ -1,43 +1,92 @@
 package iudx.connector;
 
-import java.util.logging.Logger;
 
+import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
-import io.vertx.core.Vertx;
+import io.vertx.core.Future;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 
-public class Connector {
+public class Connector extends AbstractVerticle {
 
-	private static final Logger logger = Logger.getLogger(Connector.class.getName());
-
-	public static void main(String[] args) {
-		int procs = Runtime.getRuntime().availableProcessors();
-		Vertx vertx = Vertx.vertx();
-
-		vertx.deployVerticle(APIServerVerticle.class.getName(),
-				new DeploymentOptions().setWorker(true).setInstances(procs * 2), event -> {
-					if (event.succeeded()) {
-						logger.info("IUDX Connector Vert.x API Server is started!");
-					} else {
-						logger.info("Unable to start IUDX v Vert.x API Server " + event.cause());
-					}
+	public	final static Logger logger = LoggerFactory.getLogger(Connector.class);
+	
+	@Override
+	public void start(Future<Void> startFuture)throws Exception
+	{
+		deployHelper(APIServerVerticle.class.getName())
+		.setHandler(apiserver ->
+		{
+			if(!apiserver.succeeded())
+			{
+				logger.debug(apiserver.cause());
+				startFuture.fail(apiserver.cause().toString());
+			}
+			
+			deployHelper(SearchVerticle.class.getName())
+			.setHandler(search -> {
+				
+			if(!search.succeeded())
+			{
+				logger.debug(search.cause());
+				startFuture.fail(search.cause().toString());
+			}
+				
+			deployHelper(MetricsVerticle.class.getName())
+			.setHandler(metrics -> {
+					
+			if(!metrics.succeeded())
+			{
+				logger.debug(metrics.cause());
+				startFuture.fail(metrics.cause().toString());
+			}
+			
+			startFuture.complete();
 				});
-
-		vertx.deployVerticle(SearchVerticle.class.getName(),
-				new DeploymentOptions().setWorker(true).setInstances(1), event -> {
-					if (event.succeeded()) {
-						logger.info("Search Verticle is started!");
-					} else {
-						logger.info("Unable to start Search Verticle " + event.cause());
-					}
-				});
-		
-		vertx.deployVerticle(MetricsVerticle.class.getName(),
-				new DeploymentOptions().setWorker(true).setInstances(1), event -> {
-					if (event.succeeded()) {
-						logger.info("MetricsVerticle started!");
-					} else {
-						logger.info("Unable to start MetricsVerticle " + event.cause());
-					}
-				});
+			});
+		});
+	}
+	
+	private Future<Void> deployHelper(String name)
+	{
+		   final Future<Void> future = Future.future();
+		   int procs = Runtime.getRuntime().availableProcessors();
+		   
+		   if("iudx.connector.APIServerVerticle".equals(name))
+		   {
+			   vertx.deployVerticle(name, new DeploymentOptions()
+					   					  .setWorker(true)
+					   					  .setInstances(procs * 2), res -> {
+			   if(res.succeeded()) 
+			   {
+				   logger.info("Deployed Verticle " + name);
+				   future.complete();
+			   }
+			   else
+			   {
+				   logger.fatal("Failed to deploy verticle " + res.cause());
+				   future.fail(res.cause());
+			   }
+					   						  
+			});
+		   }
+		   else
+		   {
+			   vertx.deployVerticle(name, res -> 
+			   {
+			      if(res.failed())
+			      {
+			         logger.fatal("Failed to deploy verticle " + name + " Cause = "+res.cause());
+			         future.fail(res.cause());
+			      } 
+			      else 
+			      {
+			    	 logger.info("Deployed Verticle " + name);
+			         future.complete();
+			      }
+			   });
+		   }
+		   
+		   return future;
 	}
 }
