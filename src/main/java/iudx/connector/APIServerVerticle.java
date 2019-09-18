@@ -3,7 +3,10 @@ package iudx.connector;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.logging.Logger;
 
 import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
@@ -15,6 +18,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
@@ -41,7 +45,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		router.post(basepath + "/search").handler(this::search);
 		router.post(basepath + "/count").handler(this::count);
-		router.post(basepath + "/subscription").handler(this::search);
+		router.post(basepath + "/subscriptions").handler(this::subscriptionsRouter);
 		router.post(basepath + "/media").handler(this::search);
 		router.post(basepath + "/download").handler(this::search);
 		router.post(basepath + "/metrics").handler(this::search);
@@ -124,7 +128,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		api = "count";
 		
 		metrics = new JsonObject();
-		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT));
 		
 		switch (decoderequest(requested_data)) {
 
@@ -246,4 +250,82 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 		});
 	}
+	
+	private void subscriptionsRouter(RoutingContext context)
+	{
+		HttpServerResponse	response	=	context.response();
+		HttpServerRequest	request		=	context.request();
+		
+		JsonObject body;
+		
+		try
+		{
+			body = context.getBodyAsJson();
+		}
+		catch(Exception e)
+		{
+			response.setStatusCode(400).end("Body is not a valid JSON");
+			return;
+		}
+		
+		//Replace this with TIP
+		String username	=	request.headers().get("username");
+		
+		//Input validation
+		if	(	(username	==	null)
+							||
+				(!body.containsKey("resource-ids"))
+							||
+				(!body.containsKey("type"))
+			)
+		{
+			response.setStatusCode(400).end("Missing fields in header or body");
+			return;
+		}
+		
+		String idList				=	body.getString("resource-ids");
+		idList						=	idList.substring(1,idList.length()-1);
+		List<String> resourceIds	=	Arrays.asList(idList.split(","));
+		
+		if(body.getString("type").equals("callback"))
+		{
+			if(!body.containsKey("callback_url"))
+			{
+				response.setStatusCode(400).end("Missing callback_url");
+				return;
+			}
+			
+			String callbackUrl			=	body.getString("callback_url");
+			callback(username, resourceIds, callbackUrl);
+		}
+		
+		else if(body.getString("type").equals("stream"))
+		{
+			stream(username, resourceIds);
+		}
+	}
+	
+	private void stream(String username, List<String> resourceIds)
+	{
+		//Step 1: Check if user has already been registered
+		//Step 2: If no, then register the user and store the apikey somewhere (But where?)
+		//Step 3: If yes, then go on to other steps
+				
+		//*********Simple way to do it**************
+		//Step 4: Bind all relevant exchanges to the user's queue
+		//Step 5: Retrieve user's apikey from the database
+		//Step 6: Construct an amqp URI and send it in the response
+				
+		//*********The way we probably want it
+		//Step 4: Create a temporary queue for the user's subscription
+		//Step 5: Bind all relevant exchanges to the temporary queue
+		//Step 6: Periodically subscribe to this queue, modify the data according to user's needs (How?)
+		//Step 7: Publish to user's exchange
+	}
+	
+	private void callback(String username, List<String> resourceIds, String callbackUrl)
+	{
+		//Same steps as stream. The last step will publish to callback_url instead of to the broker
+	}
+		
 }
