@@ -71,7 +71,6 @@ public class SearchVerticle extends AbstractVerticle {
 	            }
 	        }
 	    }
-
 		
 		database_uri = "mongodb://" + config().getString("mongo_host", database_uri) + ":"
 				+ config().getInteger("mongo_port", database_port).toString();

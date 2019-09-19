@@ -32,7 +32,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private HttpServer server;
 	private final int port = 18443;
 	private final String basepath = "/resource-server/pscdcl/v1";
-	private String api;
+	private String api, email, username, domain;
 	private HashMap<String, String> upstream;
 	int state;
 	JsonObject metrics;
@@ -207,8 +207,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
-
 		metrics.put("api", api);
+		metrics.put("state", state);
 		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
 
 		if (state != 5 || state != 6) 
