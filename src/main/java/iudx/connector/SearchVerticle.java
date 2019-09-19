@@ -7,18 +7,20 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
-import java.util.logging.Logger;
+
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.mongo.FindOptions;
 import io.vertx.ext.mongo.MongoClient;
 
 public class SearchVerticle extends AbstractVerticle {
 
-	private static final Logger logger = Logger.getLogger(SearchVerticle.class.getName());
+	private static final Logger logger = LoggerFactory.getLogger(SearchVerticle.class);
 	private static String options;
 	private static String resource_group_id;
 	private static String resource_id;
@@ -28,13 +30,17 @@ public class SearchVerticle extends AbstractVerticle {
 	private static String endTime;
 	private static String TRelation;
 
-	private MongoClient mongo;
-	private JsonObject mongoconfig;
-	private String database_uri;
-	private int database_port;
-	private String database_name;
 	private String COLLECTION;
 	private JsonObject query, isotime;
+	
+	private MongoClient mongo;
+	private JsonObject	mongoconfig;
+	private String 		database_host;
+	private int 		database_port;
+	private String 		database_user;
+	private String 		database_password;
+	private String 		database_name;
+	private String 		connectionStr;
 
 	@Override
 	public void start() throws Exception {
@@ -47,35 +53,40 @@ public class SearchVerticle extends AbstractVerticle {
 		Properties prop = new Properties();
 	    InputStream input = null;
 
-	    try {
-
+	    try 
+	    {
 	        input = new FileInputStream("config.properties");
 	        prop.load(input);
-
-	        database_uri = prop.getProperty("database_uri");
-	        database_port  = Integer.parseInt(prop.getProperty("database_port"));
-	        database_name = prop.getProperty("database_name");
-
-	        logger.info("database_uri : " + database_uri);
-	        logger.info("database_port : " + database_port);
-	        logger.info("database_name : " + database_name);
 	        
-	    } catch (IOException ex) {
-	        ex.printStackTrace();
-	    } finally {
-	        if (input != null) {
-	            try {
-	                input.close();
-	            } catch (IOException e) {
-	                e.printStackTrace();
-	            }
-	        }
-	    }
-		
-		database_uri = "mongodb://" + config().getString("mongo_host", database_uri) + ":"
-				+ config().getInteger("mongo_port", database_port).toString();
+	        database_user		=	prop.getProperty("database_user");
+	        database_password	=	prop.getProperty("database_password");
+	        database_host 		=	prop.getProperty("database_host");
+	        database_port		=	Integer.parseInt(prop.getProperty("database_port"));
+	        database_name		=	prop.getProperty("database_name");
+	        
 
-		mongoconfig = new JsonObject().put("connection_string", database_uri).put("db_name", database_name);
+	        logger.debug("database_user 	: " + database_user);
+	        logger.debug("database_password	: " + database_password);
+	        logger.debug("database_host 	: " + database_host);
+	        logger.debug("database_port 	: " + database_port);
+	        logger.debug("database_name		: " + database_name);
+	        
+	        
+	        input.close();
+	        
+	    } 
+	    catch (Exception e) 
+	    {
+	        e.printStackTrace();
+	    } 
+	    
+		mongoconfig		= 	new JsonObject()
+							.put("username", database_user)
+							.put("password", database_password)
+							.put("authSource", "test")
+							.put("host", database_host)
+							.put("port", database_port)
+							.put("db_name", database_name);
 
 		mongo = MongoClient.createShared(vertx, mongoconfig);
 	}

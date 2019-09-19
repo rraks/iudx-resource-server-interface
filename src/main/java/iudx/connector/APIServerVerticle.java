@@ -20,6 +20,7 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
 import io.vertx.ext.web.Router;
@@ -32,7 +33,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private HttpServer server;
 	private final int port = 18443;
 	private final String basepath = "/resource-server/pscdcl/v1";
-	private String api, email, username, domain;
+	private String api;
 	private HashMap<String, String> upstream;
 	int state;
 	JsonObject metrics;
@@ -207,8 +208,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
+
 		metrics.put("api", api);
-		metrics.put("state", state);
 		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
 
 		if (state != 5 || state != 6) 
@@ -255,6 +256,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	{
 		HttpServerResponse	response	=	context.response();
 		HttpServerRequest	request		=	context.request();
+		DeliveryOptions		options		=	new DeliveryOptions();
+		JsonObject 			message		=	new JsonObject();
 		
 		JsonObject body;
 		
@@ -283,9 +286,12 @@ public class APIServerVerticle extends AbstractVerticle {
 			return;
 		}
 		
-		String idList				=	body.getString("resource-ids");
+		JsonArray idListArray		=	body.getJsonArray("resource-ids");
+		String idList				=	idListArray.encode();
 		idList						=	idList.substring(1,idList.length()-1);
 		List<String> resourceIds	=	Arrays.asList(idList.split(","));
+		
+		logger.info(resourceIds.toString());
 		
 		if(body.getString("type").equals("callback"))
 		{
@@ -295,37 +301,44 @@ public class APIServerVerticle extends AbstractVerticle {
 				return;
 			}
 			
-			String callbackUrl			=	body.getString("callback_url");
-			callback(username, resourceIds, callbackUrl);
+			String callbackUrl	=	body.getString("callback_url");
+			
+			options.addHeader("type", "callback");
+			message.put("username",username);
+			message.put("resourceIds",resourceIds);
+			message.put("calback_url", callbackUrl);
+			
+			vertx.eventBus().send("subscription", message, options, reply -> {
+				
+				if(!reply.succeeded())
+				{
+					response.setStatusCode(500).end("Internal server error");
+					return;
+				}
+				
+				response.setStatusCode(200).end();
+				
+			});
 		}
 		
 		else if(body.getString("type").equals("stream"))
 		{
-			stream(username, resourceIds);
+			options.addHeader("type", "stream");
+			message.put("username", username);
+			message.put("resourceIds", resourceIds);
+			
+			vertx.eventBus().send("subscription", message, options, reply -> {
+				
+				if(!reply.succeeded())
+				{
+					response.setStatusCode(500).end("Internal server error");
+					return;
+				}
+				
+				response.setStatusCode(200).end();
+				
+			});
 		}
-	}
-	
-	private void stream(String username, List<String> resourceIds)
-	{
-		//Step 1: Check if user has already been registered
-		//Step 2: If no, then register the user and store the apikey somewhere (But where?)
-		//Step 3: If yes, then go on to other steps
-				
-		//*********Simple way to do it**************
-		//Step 4: Bind all relevant exchanges to the user's queue
-		//Step 5: Retrieve user's apikey from the database
-		//Step 6: Construct an amqp URI and send it in the response
-				
-		//*********The way we probably want it
-		//Step 4: Create a temporary queue for the user's subscription
-		//Step 5: Bind all relevant exchanges to the temporary queue
-		//Step 6: Periodically subscribe to this queue, modify the data according to user's needs (How?)
-		//Step 7: Publish to user's exchange
-	}
-	
-	private void callback(String username, List<String> resourceIds, String callbackUrl)
-	{
-		//Same steps as stream. The last step will publish to callback_url instead of to the broker
 	}
 		
 }

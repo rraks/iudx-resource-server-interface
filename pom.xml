@@ -33,7 +33,6 @@
 			<artifactId>vertx-web</artifactId>
 			<version>${stack.version}</version>
 		</dependency>
-
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
