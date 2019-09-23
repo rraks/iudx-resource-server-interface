@@ -3,13 +3,10 @@ package iudx.connector;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Logger;
-
-import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
@@ -49,7 +46,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		router.post(basepath + "/subscriptions").handler(this::subscriptionsRouter);
 		router.post(basepath + "/media").handler(this::search);
 		router.post(basepath + "/download").handler(this::search);
-		router.post(basepath + "/metrics").handler(this::search);
+		router.post(basepath + "/metrics").handler(this::metrics);
 
 		server = vertx.createHttpServer(new HttpServerOptions().setSsl(true)
 				.setKeyStoreOptions(new JksOptions().setPath("my-keystore.jks").setPassword("password")));
@@ -149,6 +146,29 @@ public class APIServerVerticle extends AbstractVerticle {
 		}
 	}
 	
+	private void metrics(RoutingContext routingContext) {
+
+		HttpServerResponse response = routingContext.response();
+
+		JsonObject requested_data = new JsonObject();
+		DeliveryOptions options = new DeliveryOptions();
+		requested_data = routingContext.getBodyAsJson();
+		api = "metrics";
+
+		metrics = new JsonObject();
+		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		
+		vertx.eventBus().send("get-metrics", requested_data, options, replyHandler -> {
+			if (replyHandler.succeeded()) {
+				handle200(response, replyHandler);
+			} else {
+				response.setStatusCode(400).end();
+			}
+		});
+		
+		updatemetrics(requested_data, metrics);
+	}
+	
 	private int decoderequest(JsonObject requested_data) {
 
 		state = 0;
@@ -238,7 +258,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		System.out.println(metrics);
 		
-		vertx.eventBus().send("metrics", metrics, replyHandler -> {
+		vertx.eventBus().send("update-metrics", metrics, replyHandler -> {
 			
 			if (replyHandler.succeeded()) 
 			{
