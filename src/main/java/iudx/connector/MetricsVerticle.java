@@ -4,17 +4,18 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
-import java.util.logging.Logger;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.mongo.MongoClient;
 
 public class MetricsVerticle extends AbstractVerticle {
 	
-	private static final Logger logger = Logger.getLogger(MetricsVerticle.class.getName());
+	private static final Logger logger = LoggerFactory.getLogger(MetricsVerticle.class.getName());
 	private String COLLECTION;
 	private JsonObject query, isotime;
 	
@@ -53,14 +54,19 @@ public class MetricsVerticle extends AbstractVerticle {
 	        input = new FileInputStream("config.properties");
 	        prop.load(input);
 
-	        database_uri = prop.getProperty("database_uri"); 
-	        database_port  = Integer.parseInt(prop.getProperty("database_port"));
-	        database_name = prop.getProperty("database_name");
-
-	        logger.info("database_uri : " + database_uri);
-	        logger.info("database_port : " + database_port);
-	        logger.info("database_name : " + database_name);
+	        database_user		=	prop.getProperty("database_user");
+	        database_password	=	prop.getProperty("database_password");
+	        database_host 		=	prop.getProperty("database_host");
+	        database_port		=	Integer.parseInt(prop.getProperty("database_port"));
+	        database_name		=	prop.getProperty("database_name");
 	        
+
+	        logger.info("database_user 	: " + database_user);
+	        logger.info("database_password	: " + database_password);
+	        logger.info("database_host 	: " + database_host);
+	        logger.info("database_port 	: " + database_port);
+	        logger.info("database_name		: " + database_name);
+	        	        
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
 	    } finally {
@@ -73,9 +79,13 @@ public class MetricsVerticle extends AbstractVerticle {
 	        }
 	    }
 		
-		database_uri = "mongodb://" + database_uri + ":"	+ database_port;
-
-		mongoconfig = new JsonObject().put("connection_string", database_uri).put("db_name", database_name);
+		mongoconfig		= 	new JsonObject()
+							.put("username", database_user)
+							.put("password", database_password)
+							.put("authSource", "test")
+							.put("host", database_host)
+							.put("port", database_port)
+							.put("db_name", database_name);
 
 		mongo = MongoClient.createShared(vertx, mongoconfig);
 
@@ -83,9 +93,12 @@ public class MetricsVerticle extends AbstractVerticle {
 
 	private void updateMetrics(Message<Object> message) {
 
-		JsonObject details = new JsonObject(message.body().toString());
+		JsonObject request = new JsonObject(message.body().toString());
 
-		if(details.containsKey("email"))
+		if(request.getString("endpoint").equalsIgnoreCase("metrics")) 
+		{
+			COLLECTION = "metrics";			
+		} else if(request.containsKey("email"))
 		{
 			COLLECTION = "user_metrics";
 		} 
@@ -94,7 +107,7 @@ public class MetricsVerticle extends AbstractVerticle {
 			COLLECTION = "api_metrics";	
 		}
 
-		mongo.insert(COLLECTION, details, write_response -> {
+		mongo.insert(COLLECTION, request, write_response -> {
 			if (write_response.succeeded()) 
 			{
 				logger.info("Metrics Saved ! ");

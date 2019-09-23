@@ -68,6 +68,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		metrics.put("endpoint", api);
 		
 		switch (decoderequest(requested_data)) {
 
@@ -127,6 +128,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT));
+		metrics.put("endpoint", api);
 		
 		switch (decoderequest(requested_data)) {
 
@@ -153,8 +155,8 @@ public class APIServerVerticle extends AbstractVerticle {
 		JsonObject requested_data = new JsonObject();
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
-		api = "metrics";
-
+		api = "metrics"; 
+		
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		
@@ -230,6 +232,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
 
 		metrics.put("api", api);
+		metrics.put("endpoint", api);
 		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
 
 		if (state != 5 || state != 6) 
@@ -256,7 +259,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		}
 
-		System.out.println(metrics);
+		logger.info("Metrics is : " + metrics);
 		
 		vertx.eventBus().send("update-metrics", metrics, replyHandler -> {
 			
