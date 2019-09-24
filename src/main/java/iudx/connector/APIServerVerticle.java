@@ -30,7 +30,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private HttpServer server;
 	private final int port = 18443;
 	private final String basepath = "/resource-server/pscdcl/v1";
-	private String api;
+	private String event, api;
 	private HashMap<String, String> upstream;
 	int state;
 	JsonObject metrics;
@@ -65,7 +65,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
 		api = "search";
-
+		event = "search";
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		metrics.put("endpoint", api);
@@ -81,14 +81,14 @@ public class APIServerVerticle extends AbstractVerticle {
 				logger.info("case-1: latest data for an item in group");
 				options.addHeader("state", Integer.toString(state));
 				options.addHeader("options", "latest");
-				publishEvent(requested_data, options, response, metrics);
+				publishEvent(event, requested_data, options, response);
 			}
 
 			else if (requested_data.getString("options").contains("status")) {
 				logger.info("case-1: status for an item in group");
 				options.addHeader("state", Integer.toString(state));
 				options.addHeader("options", "status");
-				publishEvent(requested_data, options, response, metrics);			
+				publishEvent(event, requested_data, options, response);			
 			}
 
 			
@@ -97,13 +97,13 @@ public class APIServerVerticle extends AbstractVerticle {
 		case 2:
 			logger.info("case-2: latest data for all the items in group");
 			options.addHeader("state", Integer.toString(state));
-			publishEvent(requested_data, options, response, metrics);
+			publishEvent(event, requested_data, options, response);
 			break;
 
 		case 3:
 			logger.info("case-3: time-series data for an item in group");
 			options.addHeader("state", Integer.toString(state));
-			publishEvent(requested_data, options, response, metrics);
+			publishEvent(event, requested_data, options, response);
 			break;
 
 		case 4:
@@ -112,7 +112,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		case 5:
 			logger.info("case-5: geo search for an item group");
 			options.addHeader("state", Integer.toString(state));
-			publishEvent(requested_data, options, response, metrics);
+			publishEvent(event, requested_data, options, response);
 			break;			
 			
 		}
@@ -125,6 +125,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
 		api = "count";
+		event = "search"; 
 		
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT));
@@ -136,14 +137,14 @@ public class APIServerVerticle extends AbstractVerticle {
 			logger.info("case-4: count for time-series data for an item in group");
 			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
-			publishEvent(requested_data, options, response, metrics);
+			publishEvent(event, requested_data, options, response);
 			break;
 			
 		case 6:
 			logger.info("case-6: count for geo search for an item group");
 			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
-			publishEvent(requested_data, options, response, metrics);
+			publishEvent(event, requested_data, options, response);
 			break;
 		}
 	}
@@ -157,18 +158,13 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		api = "metrics"; 
 
+		event = "get-metrics"; 
+
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		
-		vertx.eventBus().send("get-metrics", requested_data, options, replyHandler -> {
-			if (replyHandler.succeeded()) 
-			{
-				handle200(response, replyHandler, requested_data);
-			} else 
-			{
-				response.setStatusCode(400).end();
-			}
-		});
+
+		publishEvent(event, requested_data, options, response);
 		
 	}
 	
@@ -214,8 +210,8 @@ public class APIServerVerticle extends AbstractVerticle {
 		return state;
 	}
 	
-	private void publishEvent(JsonObject requested_data, DeliveryOptions options, HttpServerResponse response, JsonObject metrics ) {
-		vertx.eventBus().send("search", requested_data, options, replyHandler -> {
+	private void publishEvent(String event, JsonObject requested_data, DeliveryOptions options, HttpServerResponse response) {
+		vertx.eventBus().send(event, requested_data, options, replyHandler -> {
 			if (replyHandler.succeeded()) 
 			{
 				handle200(response, replyHandler, requested_data);
