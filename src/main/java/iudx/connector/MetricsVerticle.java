@@ -126,19 +126,17 @@ public class MetricsVerticle extends AbstractVerticle {
 		JsonObject request = new JsonObject(message.body().toString());
 		JsonObject query = decoderequest(request);
 		
-		if(request.getString("api").equalsIgnoreCase("metrics")) 
-		{
-			COLLECTION = "metrics";			
-		}
-		else if(request.containsKey("email"))
-		{
-			COLLECTION = "user_metrics";
+		if (request.containsKey("api")) {
+			if (request.getString("api").equalsIgnoreCase("metrics")) 
+			{
+				COLLECTION = "metrics";
+			} 
+			else
+			{
+				COLLECTION = "api_metrics";	
+			}
 		} 
-		else
-		{
-			COLLECTION = "api_metrics";	
-		}
-
+		
 		mongoCount(COLLECTION, query, message);
 	}
 	
