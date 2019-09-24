@@ -95,7 +95,7 @@ public class MetricsVerticle extends AbstractVerticle {
 
 		JsonObject request = new JsonObject(message.body().toString());
 
-		if(request.getString("endpoint").equalsIgnoreCase("metrics")) 
+		if(request.getString("api").equalsIgnoreCase("metrics")) 
 		{
 			COLLECTION = "metrics";			
 		} else if(request.containsKey("email"))

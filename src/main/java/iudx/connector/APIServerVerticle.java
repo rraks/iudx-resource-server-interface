@@ -151,24 +151,25 @@ public class APIServerVerticle extends AbstractVerticle {
 	private void metrics(RoutingContext routingContext) {
 
 		HttpServerResponse response = routingContext.response();
+		final JsonObject requested_data = routingContext.getBodyAsJson();
 
-		JsonObject requested_data = new JsonObject();
 		DeliveryOptions options = new DeliveryOptions();
-		requested_data = routingContext.getBodyAsJson();
+
 		api = "metrics"; 
-		
+
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		
 		vertx.eventBus().send("get-metrics", requested_data, options, replyHandler -> {
-			if (replyHandler.succeeded()) {
-				handle200(response, replyHandler);
-			} else {
+			if (replyHandler.succeeded()) 
+			{
+				handle200(response, replyHandler, requested_data);
+			} else 
+			{
 				response.setStatusCode(400).end();
 			}
 		});
 		
-		updatemetrics(requested_data, metrics);
 	}
 	
 	private int decoderequest(JsonObject requested_data) {
@@ -215,18 +216,21 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private void publishEvent(JsonObject requested_data, DeliveryOptions options, HttpServerResponse response, JsonObject metrics ) {
 		vertx.eventBus().send("search", requested_data, options, replyHandler -> {
-			if (replyHandler.succeeded()) {
-				handle200(response, replyHandler);
-				updatemetrics(requested_data, metrics);
-			} else {
+			if (replyHandler.succeeded()) 
+			{
+				handle200(response, replyHandler, requested_data);
+
+			} else 
+			{
 				response.setStatusCode(400).end();
 			}
 		});
 	}
 
-	private void handle200(HttpServerResponse response, AsyncResult<Message<Object>> replyHandler) {
+	private void handle200(HttpServerResponse response, AsyncResult<Message<Object>> replyHandler, JsonObject requested_data) {
 		response.setStatusCode(200).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json")
 				.end(replyHandler.result().body().toString());
+		updatemetrics(requested_data, metrics);
 	}
 
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
