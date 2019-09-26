@@ -30,7 +30,6 @@ public class SearchVerticle extends AbstractVerticle {
 	private static String endTime;
 	private static String TRelation;
 
-	private String COLLECTION;
 	private JsonObject query, isotime;
 	
 	private MongoClient mongo;
@@ -40,6 +39,7 @@ public class SearchVerticle extends AbstractVerticle {
 	private String 		database_user;
 	private String 		database_password;
 	private String 		database_name;
+	private String 		auth_database;
 	private String 		connectionStr;
 
 	@Override
@@ -63,13 +63,15 @@ public class SearchVerticle extends AbstractVerticle {
 	        database_host 		=	prop.getProperty("database_host");
 	        database_port		=	Integer.parseInt(prop.getProperty("database_port"));
 	        database_name		=	prop.getProperty("database_name");
-	        
+	        auth_database		=	prop.getProperty("auth_database");
+	        	        
 
 	        logger.debug("database_user 	: " + database_user);
 	        logger.debug("database_password	: " + database_password);
 	        logger.debug("database_host 	: " + database_host);
 	        logger.debug("database_port 	: " + database_port);
 	        logger.debug("database_name		: " + database_name);
+	        logger.debug("auth_database		: " + auth_database);
 	        
 	        
 	        input.close();
@@ -83,7 +85,7 @@ public class SearchVerticle extends AbstractVerticle {
 		mongoconfig		= 	new JsonObject()
 							.put("username", database_user)
 							.put("password", database_password)
-							.put("authSource", "test")
+							.put("authSource", auth_database)
 							.put("host", database_host)
 							.put("port", database_port)
 							.put("db_name", database_name);
@@ -118,7 +120,7 @@ public class SearchVerticle extends AbstractVerticle {
 			}
 		}
 
-		searchDatabase(state, COLLECTION, query, fields, message);
+		searchDatabase(state, "archive", query, fields, message);
 	}
 
 	private JsonObject constructQuery(int state, Message<Object> message) {
@@ -133,7 +135,6 @@ public class SearchVerticle extends AbstractVerticle {
 			resource_group_id = request.getString("resource-group-id");
 			resource_id = request.getString("resource-id");
 
-			COLLECTION = resource_group_id;
 			query.put("__resource-id", resource_id);
 			break;
 
@@ -169,7 +170,6 @@ public class SearchVerticle extends AbstractVerticle {
 	private JsonObject constructTimeSeriesQuery(JsonObject request) {
 
 		resource_group_id = request.getString("resource-group-id");
-		COLLECTION = resource_group_id;
 		resource_id = request.getString("resource-id");
 		time = request.getString("time");
 		TRelation = request.getString("TRelation");
@@ -215,7 +215,6 @@ public class SearchVerticle extends AbstractVerticle {
 
 		resource_group_id = request.getString("resource-group-id");
 		resource_id = request.getString("resource-id");
-		COLLECTION = resource_group_id;
 		double latitude = Double.parseDouble(request.getString("lat"));
 		double longitude = Double.parseDouble(request.getString("lon"));
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
@@ -241,7 +240,7 @@ public class SearchVerticle extends AbstractVerticle {
 			attributeFilter.put("_id", 0);
 
 			sortFilter = new JsonObject();
-			sortFilter.put("LASTUPDATEDATETIME", -1);
+			sortFilter.put("__time", -1);
 
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
@@ -294,7 +293,7 @@ public class SearchVerticle extends AbstractVerticle {
 
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
-		String[] hiddenFields = { "__resource-id", "__time", "__geoJsonLocation", "_id" };
+		String[] hiddenFields = { "__resource-id", "__time", "__geoJsonLocation", "_id", "__resource-group" };
 
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
 			if (database_response.succeeded()) {
@@ -304,7 +303,9 @@ public class SearchVerticle extends AbstractVerticle {
 
 					if (api.equalsIgnoreCase("status")) {
 						JsonObject status = new JsonObject();
-						String time = j.getString("LASTUPDATEDATETIME");
+						System.out.println(j);
+						JsonObject __time = j.getJsonObject("__time");
+						String time = __time.getString("$date");
 						DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS[XXX][X]");
 						LocalDateTime sensedDateTime = LocalDateTime.parse(time, format);
 						LocalDateTime currentDateTime = LocalDateTime.now();

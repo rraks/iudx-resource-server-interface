@@ -1,11 +1,16 @@
 package iudx.connector;
 
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.logging.Logger;
 
 import io.vertx.core.AbstractVerticle;
@@ -67,7 +72,14 @@ public class APIServerVerticle extends AbstractVerticle {
 		api = "search";
 		event = "search";
 		metrics = new JsonObject();
-		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
+		
+		TimeZone tz = TimeZone.getTimeZone("UTC");
+		DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
+		df.setTimeZone(tz);
+		String nowAsISO = df.format(new Date());
+
+		metrics.put("time", nowAsISO);
+
 		metrics.put("endpoint", api);
 		
 		switch (decoderequest(requested_data)) {
@@ -170,6 +182,13 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private int decoderequest(JsonObject requested_data) {
 
+		String[] splitId = requested_data.getString("id").split("/");
+		String resource_group = splitId[3];
+		String resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
+		requested_data.put("resource-group-id", resource_group);
+		requested_data.put("resource-id", resource_id);
+		requested_data.remove("id");
+		
 		state = 0;
 
 		if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")

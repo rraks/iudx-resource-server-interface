@@ -27,6 +27,7 @@ public class MetricsVerticle extends AbstractVerticle {
 	private String 		database_user;
 	private String 		database_password;
 	private String 		database_name;
+	private String 		auth_database;
 
 	
 	@Override
@@ -59,6 +60,7 @@ public class MetricsVerticle extends AbstractVerticle {
 	        database_host 		=	prop.getProperty("database_host");
 	        database_port		=	Integer.parseInt(prop.getProperty("database_port"));
 	        database_name		=	prop.getProperty("database_name");
+	        auth_database		=	prop.getProperty("auth_database");
 	        
 
 	        logger.info("database_user 	: " + database_user);
@@ -66,6 +68,7 @@ public class MetricsVerticle extends AbstractVerticle {
 	        logger.info("database_host 	: " + database_host);
 	        logger.info("database_port 	: " + database_port);
 	        logger.info("database_name		: " + database_name);
+	        logger.debug("auth_database		: " + auth_database);
 	        	        
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
@@ -82,7 +85,7 @@ public class MetricsVerticle extends AbstractVerticle {
 		mongoconfig		= 	new JsonObject()
 							.put("username", database_user)
 							.put("password", database_password)
-							.put("authSource", "test")
+							.put("authSource", auth_database)
 							.put("host", database_host)
 							.put("port", database_port)
 							.put("db_name", database_name);
