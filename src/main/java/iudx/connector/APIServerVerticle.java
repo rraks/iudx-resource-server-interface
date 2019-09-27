@@ -127,6 +127,25 @@ public class APIServerVerticle extends AbstractVerticle {
 			publishEvent(event, requested_data, options, response);
 			break;			
 			
+		case 7:
+			logger.info("case-7: geo search(bbox) for an item group");
+			options.addHeader("state", "7");
+			publishEvent(event,requested_data, options, response);
+			break;			
+
+		case 8:
+			logger.info("case-8: geo search(Polygon/LineString) for an item group");
+			options.addHeader("state", "8");
+			publishEvent(event,requested_data, options, response);
+			break;			
+
+
+		case 11:
+			logger.info("case-11: attribute search for resource for an item group");
+			options.addHeader("state","11");
+			publishEvent(event,requested_data,options,response);
+			break;
+
 		}
 	}
 
@@ -157,6 +176,27 @@ public class APIServerVerticle extends AbstractVerticle {
 			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
 			publishEvent(event, requested_data, options, response);
+			break;
+		
+        case 9:
+			logger.info("case-9: count for geo search(bbox) for an item group");
+			options.addHeader("state", "9");
+			options.addHeader("options", "count");
+			publishEvent(event,requested_data, options, response);
+			break;
+		
+        case 10:
+			logger.info("case-10: count for geo search(Polygon/LineString) for an item group");
+			options.addHeader("state", "10");
+			options.addHeader("options", "count");
+			publishEvent(event,requested_data, options, response);
+			break;
+
+		case 12:
+			logger.info("case-12: count for attribute search for an item group");
+			options.addHeader("state","12");
+			options.addHeader("options","count");
+			publishEvent(event,requested_data,options, response);
 			break;
 		}
 	}
@@ -190,42 +230,82 @@ public class APIServerVerticle extends AbstractVerticle {
 		requested_data.remove("id");
 		
 		state = 0;
-
 		if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("resource-id")) {
-			state = 1; 
+				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
+			state = 1;
+
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& !requested_data.containsKey("resource-id")) {
+				&& !requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 2;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")) {
+				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 3;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")) {
+				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 4;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius")) {
+				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
+				&& !requested_data.containsKey("geometry")) {
 			state = 5;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius")) {
+				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
+				&& !requested_data.containsKey("geometry")) {
 			state = 6;
 		}
 		
+		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")) {
+			state = 7;
+		}
+
+		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
+			state = 8;
+		}
 		
+        else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")) {
+			state = 9;
+		}
+
+		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
+			state = 10;
+		}
+
+		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
+				&& requested_data.containsKey("resource-group-id") && (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
+				&& !requested_data.containsKey("time")  && !requested_data.containsKey("lat") && !requested_data.containsKey("geometry")){
+			state=11;
+		}
+
+		else if (api.equalsIgnoreCase("count") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
+				&& (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
+				&& requested_data.containsKey("resource-group-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")){
+			state=12;
+		}
+		System.out.println("STATE: "+ state);
 		return state;
 	}
 	

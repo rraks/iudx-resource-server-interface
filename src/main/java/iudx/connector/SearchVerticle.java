@@ -11,6 +11,7 @@ import java.util.Properties;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -29,7 +30,6 @@ public class SearchVerticle extends AbstractVerticle {
 	private static String startTime;
 	private static String endTime;
 	private static String TRelation;
-
 	private JsonObject query, isotime;
 	
 	private MongoClient mongo;
@@ -41,6 +41,14 @@ public class SearchVerticle extends AbstractVerticle {
 	private String 		database_name;
 	private String 		auth_database;
 	private String 		connectionStr;
+	private static final String COLLECTION = "archive";
+	private JsonObject resourceQuery,finalQuery;
+
+    
+    private String geometry="", relation="", coordinatesS="";
+    private String[] coordinatesArr;
+    private JsonArray coordinates;
+    private JsonArray expressions;
 
 	@Override
 	public void start() throws Exception {
@@ -127,40 +135,73 @@ public class SearchVerticle extends AbstractVerticle {
 
 		JsonObject request = (JsonObject) message.body();
 		query = new JsonObject();
+		finalQuery = new JsonObject();
+		resourceQuery = new JsonObject();
 		isotime = new JsonObject();
+		resource_group_id = request.getString("resource-group-id");
+		resource_id = request.getString("resource-id");
+		resourceQuery.put("__resource-id",resource_id);
+		resourceQuery.put("__resource-group",resource_group_id);
 
 		switch (state) {
 		case 1:
 			options = request.getString("options");
-			resource_group_id = request.getString("resource-group-id");
-			resource_id = request.getString("resource-id");
-
-			query.put("__resource-id", resource_id);
-			break;
+			//resource_group_id = request.getString("resource-group-id");
+			//resource_id = request.getString("resource-id");
+			//resourceQuery.put("__resource-id", resource_id);
+			return resourceQuery;
 
 		case 2:
 			options = request.getString("options");
-			resource_group_id = request.getString("resource-group-id");
+			//resource_group_id = request.getString("resource-group-id");
+			query=resourceQuery;
 			return query;
 
 		case 3:
 			query = constructTimeSeriesQuery(request);
-			return query;
+			break;
 
 		case 4:
 			query = constructTimeSeriesQuery(request);
-			return query;
+			break;
 
 		case 5:
 			query = constructGeoCircleQuery(request);
-			return query;
+			break;
 
 		case 6:
 			query = constructGeoCircleQuery(request);
-			return query;
-		}
+			break;
 
-		return query;
+        case 7:
+			query = constructGeoBboxQuery(request);
+            break;
+
+        case 8:
+            query = constructGeoPoly_LineQuery(request);
+            break;
+        
+        case 9:
+            query = constructGeoBboxQuery(request);
+            break;
+        
+        case 10:
+            query = constructGeoPoly_LineQuery(request);
+            break;
+
+		case 11:
+			query = constructAttributeQuery(request);
+			break;
+
+		case 12:
+			query = constructAttributeQuery(request);
+			break;
+		}
+		expressions=new JsonArray();
+		expressions.add(resourceQuery).add(query);
+		finalQuery.put("$and",expressions);
+		System.out.println("FINAL QUERY: "+finalQuery.toString());
+		return finalQuery;
 	}
 
 	double MetersToDecimalDegrees(double meters, double latitude) {
@@ -212,9 +253,6 @@ public class SearchVerticle extends AbstractVerticle {
 	}
 
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
-
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
 		double latitude = Double.parseDouble(request.getString("lat"));
 		double longitude = Double.parseDouble(request.getString("lon"));
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
@@ -226,6 +264,301 @@ public class SearchVerticle extends AbstractVerticle {
 		return query;
 
 	}
+
+    private JsonObject constructGeoBboxQuery(JsonObject request){
+        geometry="bbox";
+        JsonObject geoQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
+		coordinates = new JsonArray();
+        relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
+        boolean valid = validateRelation(geometry, relation);
+        if(valid){
+            coordinatesS = request.getString("bbox");
+            coordinatesArr = coordinatesS.split(",");
+            JsonArray temp = new JsonArray();
+            JsonArray y1x1 = new JsonArray().add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[0]));
+            JsonArray y1x2 = new JsonArray().add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[2]));
+            JsonArray y2x2 = new JsonArray().add(getDoubleFromS(coordinatesArr[3])).add(getDoubleFromS(coordinatesArr[2]));
+            JsonArray y2x1 = new JsonArray().add(getDoubleFromS(coordinatesArr[3])).add(getDoubleFromS(coordinatesArr[0]));
+            temp.add(y1x1).add(y1x2).add(y2x2).add(y2x1).add(y1x1);
+            coordinates.add(temp);
+            geoQuery = buildGeoQuery("Polygon",coordinates,relation);
+        
+        } else
+            geoQuery=null;
+
+        if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			JsonObject attributeQuery = constructAttributeQuery(request);
+			expressions.add(geoQuery).add(attributeQuery);
+			query.put("$and",expressions);
+		} else
+			query=geoQuery;
+
+        return query;
+    }
+
+    private JsonObject constructGeoPoly_LineQuery(JsonObject request){
+
+		JsonObject geoQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
+		coordinates = new JsonArray();
+        //Polygon or LineString
+        if(request.containsKey("geometry")){
+            if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
+                geometry = "Polygon";
+        else if(request.getString("geometry").toUpperCase().contains("lineString".toUpperCase()))
+            geometry = "LineString";
+        }
+
+        relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
+        boolean valid = validateRelation(geometry, relation);
+        if(valid){
+            switch(geometry){
+                case "Polygon":
+                    coordinatesS = request.getString("geometry");
+                    coordinatesS = coordinatesS.replaceAll("[a-zA-Z()]","");
+                    coordinatesArr = coordinatesS.split(",");
+                    JsonArray extRing = new JsonArray();
+                    for (int i = 0 ; i<coordinatesArr.length;i+=2){
+                        JsonArray points = new JsonArray();
+                        points.add(getDoubleFromS(coordinatesArr[i+1])).add(getDoubleFromS(coordinatesArr[i]));
+                        extRing.add(points);
+                    }
+                    coordinates.add(extRing);
+                    System.out.println("QUERY: " + coordinates.toString());
+                    query = buildGeoQuery(geometry,coordinates,relation);
+                    break;
+
+                case "LineString":
+                    coordinatesS = request.getString("geometry");
+                    coordinatesS = coordinatesS.replaceAll("[a-zA-Z()]","");
+                    coordinatesArr = coordinatesS.split(",");
+                    for (int i = 0 ; i<coordinatesArr.length;i+=2){
+                        JsonArray points = new JsonArray();
+                        points.add(getDoubleFromS(coordinatesArr[i+1])).add(getDoubleFromS(coordinatesArr[i]));
+                        coordinates.add(points);
+                    }
+                    query = buildGeoQuery(geometry,coordinates,relation);
+                    break;
+				default:
+					throw new IllegalStateException("Unexpected value: " + geometry);
+			}
+        }else 
+            geoQuery=null;
+
+		if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			JsonObject attributeQuery = constructAttributeQuery(request);
+			expressions.add(geoQuery).add(attributeQuery);
+			query.put("$and",expressions);
+		} else
+			query=geoQuery;
+
+        return query;
+    }
+
+	private JsonObject constructAttributeQuery(JsonObject request){
+
+		JsonObject query = new JsonObject();
+		String attribute_name = request.getString("attribute-name");
+		String attribute_value = request.getString("attribute-value");
+		String comparison_operator;
+		comparison_operator=request.getString("comparison-operator").toLowerCase();
+		System.out.println("ATTRIBUTE SEARCH");
+		Double attr_v_n=0.0;
+		if(isNumeric(attribute_value))
+			attr_v_n=Double.parseDouble(attribute_value);
+
+			switch (comparison_operator){
+
+				case "propertyisequalto":
+					query.put(attribute_name,attribute_value);
+					break;
+
+				case "propertyisnotequalto":
+					query = numericQuery(attribute_name,attr_v_n,"$ne");
+					break;
+
+				case "propertyislessthan":
+					query = numericQuery(attribute_name,attr_v_n,"$lt");
+					break;
+
+				case "propertyisgreaterthan":
+					query = numericQuery(attribute_name,attr_v_n,"$gt");
+					break;
+
+				case "propertyislessthanequalto":
+					query = numericQuery(attribute_name,attr_v_n,"$lte");
+					break;
+
+				case "propertyisgreaterthanequalto":
+					query = numericQuery(attribute_name,attr_v_n,"$gte");
+					break;
+
+				case "propertyislike":
+					query.put(attribute_name,new JsonObject().put("$regex",attribute_value)
+																.put("$options","i"));
+					break;
+
+				case "propertyisbetween":
+					String[] attr_arr = attribute_value.split(",");
+					query.put("$expr",new JsonObject()
+										.put("$and",new JsonArray().add(new JsonObject()
+													.put("$gt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[0]))))
+													.add(new JsonObject()
+															.put("$lt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[1]))))));
+
+					break;
+
+			}
+		return query;
+	}
+
+	/**
+	 * Helper function to determine if the attribute-value has a numeric value as String
+	 **/
+
+	private boolean isNumeric(String s){
+
+		try {
+				double d = Double.parseDouble(s);
+		}catch (NumberFormatException | NullPointerException e){
+			return false;
+		}
+		return true;
+	}
+
+    private JsonObject buildGeoQuery(String geometry, JsonArray coordinates, String relation){
+
+	JsonObject query = new JsonObject();
+
+	switch(relation){
+
+		case "equals": query = new JsonObject()
+						.put("geoJsonLocation.coordinates",coordinates );
+				break;
+
+		case "disjoint": break;
+
+		case "touches": query = searchGeoIntersects(geometry,coordinates);
+				break;
+
+		case "overlaps": query = searchGeoIntersects(geometry,coordinates);
+				 break;
+
+		case "crosses": query = searchGeoIntersects(geometry,coordinates);
+				break;
+
+		case "contains": break;
+
+		case "intersects": query = searchGeoIntersects(geometry,coordinates);
+				            break;
+
+		case "within": query = searchGeoWithin(geometry,coordinates);
+				        break;
+
+        default: break;
+	}
+
+    return query;
+  }
+
+  /**
+   * Helper function to convert string values to Double
+   */
+  private Double getDoubleFromS(String s){
+    Double d = Double.parseDouble(s);
+    return d;
+  }
+
+  /**
+   * Helper function to generate query in mongo to compare Numeric values encoded
+   * as Strings with Numbers
+   **/
+  private JsonObject numericQuery(String attrName, Double attrValue, String comparisonOp){
+
+  	JsonObject query = new JsonObject();
+  	query.put("$expr", new JsonObject()
+						.put(comparisonOp,new JsonArray()
+									.add(new JsonObject()
+											.put("$toDouble","$"+attrName))
+									.add(attrValue)));
+  	return query;
+  }
+
+  /**
+   * Performs Mongo-GeoIntersects operation
+   * */
+
+  private JsonObject searchGeoIntersects(String geometry, JsonArray coordinates){
+
+	JsonObject query = new JsonObject();
+
+	query.put("geoJsonLocation", new JsonObject()
+				.put("$geoIntersects", new JsonObject()
+					.put("$geometry",new JsonObject()
+						.put("type",geometry)
+						.put("coordinates",coordinates))));
+	System.out.println("GeoIntersects: "+query.toString());
+    return query;
+  }
+
+  /**
+   * Performs Mongo-GeoWithin operation
+   * */
+
+  private JsonObject searchGeoWithin(String geometry, JsonArray coordinates){
+
+    JsonObject query = new JsonObject();
+    query.put("geoJsonLocation", new JsonObject()
+            .put("$geoWithin", new JsonObject()
+                .put("$geometry",new JsonObject()
+                    .put("type",geometry)
+                    .put("coordinates",coordinates))));
+    System.out.println("GeoWithin: " + query.toString());
+    return query;
+  }
+
+  /**
+   *Helper function to validate relation for specified geometry.
+   */
+
+  private boolean validateRelation(String geometry, String relation){
+
+	if(geometry.equalsIgnoreCase("bbox") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects")
+							|| relation.equalsIgnoreCase("within") )){
+
+		return true;
+	}
+
+    else if(geometry.equalsIgnoreCase("linestring") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects") )){
+
+		return true;
+	}
+	else if(geometry.equalsIgnoreCase("polygon") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects")
+							|| relation.equalsIgnoreCase("within") )){
+
+		return true;
+	}
+
+    else
+	   return false;
+
+  }
 
 	private void searchDatabase(int state, String COLLECTION, JsonObject query, JsonObject attributeFilter,
 			Message<Object> message) {
@@ -288,6 +621,44 @@ public class SearchVerticle extends AbstractVerticle {
 			mongoCount(state, COLLECTION, query, message);
 			break;
 
+		case 7:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
+
+		case 8:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
+
+		case 9:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+			break;
+
+		case 10:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+			break;
+
+		case 11:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
+
+		case 12:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+			break;
 		}
 	}
 
