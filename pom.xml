@@ -16,7 +16,7 @@
 		<mustache.version>0.9.5</mustache.version>
 		<postgresql.version>42.2.5</postgresql.version>
 		<main.class>vertx.App</main.class>
-		<stack.version>3.5.4</stack.version>
+		<stack.version>3.8.1</stack.version>
 		<vertx.version>4.0.0-SNAPSHOT</vertx.version>
     	<main.verticle>iudx.connector.Connector</main.verticle>
     	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -24,27 +24,41 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>io.vertx</groupId>
-			<artifactId>vertx-core</artifactId>
-			<version>${stack.version}</version>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-lang3</artifactId>
+		    <version>3.8.1</version>
 		</dependency>
 		<dependency>
-			<groupId>io.vertx</groupId>
-			<artifactId>vertx-web</artifactId>
-			<version>${stack.version}</version>
+		    <groupId>com.rabbitmq</groupId>
+		    <artifactId>amqp-client</artifactId>
+		    <version>5.6.0</version>
 		</dependency>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>3.8.1</version>
-			<scope>test</scope>
+		    <groupId>io.vertx</groupId>
+		    <artifactId>vertx-core</artifactId>
+		    <version>${stack.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>io.vertx</groupId>
-			<artifactId>vertx-mongo-client</artifactId>
-			<version>3.6.3</version>
+		    <groupId>io.vertx</groupId>
+		    <artifactId>vertx-web</artifactId>
+		    <version>${stack.version}</version>
 		</dependency>
-
+		<dependency>
+		    <groupId>junit</groupId>
+		    <artifactId>junit</artifactId>
+		    <version>3.8.1</version>
+		    <scope>test</scope>
+		</dependency>
+		<dependency>
+		    <groupId>io.vertx</groupId>
+		    <artifactId>vertx-mongo-client</artifactId>
+		    <version>3.6.3</version>
+		</dependency>
+		<dependency>
+		    <groupId>com.google.guava</groupId>
+		    <artifactId>guava</artifactId>
+		    <version>27.0.1-jre</version>
+		</dependency>
 	</dependencies>
 	
 	<build>

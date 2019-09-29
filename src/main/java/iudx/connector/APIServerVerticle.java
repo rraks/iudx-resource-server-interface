@@ -376,42 +376,41 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private void subscriptionsRouter(RoutingContext context)
 	{
-		HttpServerResponse	response	=	context.response();
-		HttpServerRequest	request		=	context.request();
-		DeliveryOptions		options		=	new DeliveryOptions();
-		JsonObject 			message		=	new JsonObject();
-		
-		JsonObject body;
+		HttpServerResponse  response	=   context.response();
+		HttpServerRequest   request	=   context.request();
+		DeliveryOptions	    options	=   new DeliveryOptions();
+		JsonObject 	    message	=   new JsonObject();
+		JsonObject	    body;
 		
 		try
 		{
-			body = context.getBodyAsJson();
+		    body = context.getBodyAsJson();
 		}
 		catch(Exception e)
 		{
-			response.setStatusCode(400).end("Body is not a valid JSON");
-			return;
+		    response.setStatusCode(400).end("Body is not a valid JSON");
+		    return;
 		}
 		
 		//Replace this with TIP
-		String username	=	request.headers().get("username");
+		String username	=   request.headers().get("username");
 		
 		//Input validation
-		if	(	(username	==	null)
-							||
-				(!body.containsKey("resource-ids"))
-							||
-				(!body.containsKey("type"))
-			)
+		if  (	(username	==	null)
+					||
+			(!body.containsKey("resource-ids"))
+					||
+			(!body.containsKey("type"))
+		    )
 		{
-			response.setStatusCode(400).end("Missing fields in header or body");
-			return;
+		    response.setStatusCode(400).end("Missing fields in header or body");
+		    return;
 		}
 		
-		JsonArray idListArray		=	body.getJsonArray("resource-ids");
-		String idList				=	idListArray.encode();
-		idList						=	idList.substring(1,idList.length()-1);
-		List<String> resourceIds	=	Arrays.asList(idList.split(","));
+		JsonArray resourceIds	    =	body.getJsonArray("resource-ids");
+		//String idList		    =	idListArray.encode();
+		//idList		    =	idList.substring(1,idList.length()-1);
+		//List<String> resourceIds  =	Arrays.asList(idList.split(","));
 		
 		logger.info(resourceIds.toString());
 		
@@ -419,11 +418,11 @@ public class APIServerVerticle extends AbstractVerticle {
 		{
 			if(!body.containsKey("callback_url"))
 			{
-				response.setStatusCode(400).end("Missing callback_url");
-				return;
+			    response.setStatusCode(400).end("Missing callback_url");
+			    return;
 			}
 			
-			String callbackUrl	=	body.getString("callback_url");
+			String callbackUrl  =	body.getString("callback_url");
 			
 			options.addHeader("type", "callback");
 			message.put("username",username);
@@ -432,13 +431,13 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			vertx.eventBus().send("subscription", message, options, reply -> {
 				
-				if(!reply.succeeded())
-				{
-					response.setStatusCode(500).end("Internal server error");
-					return;
-				}
+			    if(!reply.succeeded())
+			    {
+				response.setStatusCode(500).end("Internal server error");
+				return;
+			    }
 				
-				response.setStatusCode(200).end();
+			    response.setStatusCode(200).end();
 				
 			});
 		}
@@ -451,16 +450,31 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			vertx.eventBus().send("subscription", message, options, reply -> {
 				
-				if(!reply.succeeded())
-				{
-					response.setStatusCode(500).end("Internal server error");
-					return;
-				}
-				
-				response.setStatusCode(200).end();
-				
+			    if	(	(!reply.succeeded())
+						||
+				    (reply.result().body()  ==  null)
+				)
+			    {
+				response.setStatusCode(500).end("Internal server error");
+				return;
+			    }
+			    else
+			    {
+				String  replyString[]	=   reply.result().body().toString().split(",");
+			    	String  amqpUrl		=   replyString[0];
+			    	String  subscriptionId  =   replyString[1];	
+
+				JsonObject responseJson	=   new JsonObject();
+
+				responseJson.put("amqpUrl", amqpUrl);
+				responseJson.put("subscriptionId", subscriptionId);
+			    	    
+			    	response.putHeader("content-type", "application/json")
+					.setStatusCode(201)
+					.end(responseJson.encodePrettily());
+			    }
+
 			});
 		}
 	}
-		
 }
