@@ -1,7 +1,6 @@
 package iudx.connector;
 
 import java.text.DateFormat;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -9,7 +8,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.logging.Logger;
 
@@ -18,6 +19,7 @@ import io.vertx.core.AsyncResult;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpHeaders;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
@@ -28,12 +30,13 @@ import io.vertx.core.net.JksOptions;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.handler.CorsHandler;
 
 public class APIServerVerticle extends AbstractVerticle {
 
 	private static final Logger logger = Logger.getLogger(APIServerVerticle.class.getName());
 	private HttpServer server;
-	private final int port = 18443;
+	private final int port = 443;
 	private final String basepath = "/resource-server/pscdcl/v1";
 	private String event, api;
 	private HashMap<String, String> upstream;
@@ -43,7 +46,26 @@ public class APIServerVerticle extends AbstractVerticle {
 	@Override
 	public void start() {
 
+		Set<String> allowedHeaders = new HashSet<>();
+		allowedHeaders.add("Accept");
+		allowedHeaders.add("token");
+		allowedHeaders.add("Content-Length");
+		allowedHeaders.add("Content-Type");
+		allowedHeaders.add("Host");
+		allowedHeaders.add("Origin");
+		allowedHeaders.add("Referer");
+	    allowedHeaders.add("Access-Control-Allow-Origin");
+	    
+	    Set<HttpMethod> allowedMethods = new HashSet<>();
+	    allowedMethods.add(HttpMethod.GET);
+	    allowedMethods.add(HttpMethod.POST);
+	    allowedMethods.add(HttpMethod.OPTIONS);
+	    allowedMethods.add(HttpMethod.DELETE);
+	    allowedMethods.add(HttpMethod.PATCH);
+	    allowedMethods.add(HttpMethod.PUT);
+
 		Router router = Router.router(vertx);
+		router.route().handler(CorsHandler.create("*").allowedHeaders(allowedHeaders).allowedMethods(allowedMethods));
 		router.route().handler(BodyHandler.create());
 
 		router.post(basepath + "/search").handler(this::search);

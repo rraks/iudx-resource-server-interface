@@ -1,13 +1,12 @@
 package iudx.connector;
 
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
-
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
@@ -30,7 +29,9 @@ public class SearchVerticle extends AbstractVerticle {
 	private static String startTime;
 	private static String endTime;
 	private static String TRelation;
-	private JsonObject query, isotime;
+
+	private JsonObject query, isotime, dateTime, startDateTime, endDateTime;
+	private Instant instant, startInstant, endInstant;
 	
 	private MongoClient mongo;
 	private JsonObject	mongoconfig;
@@ -216,35 +217,61 @@ public class SearchVerticle extends AbstractVerticle {
 		TRelation = request.getString("TRelation");
 
 		if (TRelation.contains("during")) {
+
 			timeStamp = time.split("/");
 			startTime = timeStamp[0];
 			endTime = timeStamp[1];
 
+			startInstant = Instant.parse(startTime);
+
+			startDateTime = new JsonObject();
+			startDateTime.put("$date", startInstant);
+			
+			endInstant = Instant.parse(endTime);
+
+			endDateTime = new JsonObject();
+			endDateTime.put("$date", endInstant);
+			
 			query.put("__resource-id", resource_id);
-			isotime.put("$gte", startTime);
-			isotime.put("$lte", endTime);
-			query.put("LASTUPDATEDATETIME", isotime);
+			isotime.put("$gte", startDateTime);
+			isotime.put("$lte", endDateTime);
+			query.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("before")) {
 
+			instant = Instant.parse(time);
+
+			dateTime = new JsonObject();
+			dateTime.put("$date", instant);
+
 			query.put("__resource-id", resource_id);
-			isotime.put("$lte", time);
-			query.put("LASTUPDATEDATETIME", isotime);
+			isotime.put("$lte", dateTime);
+			query.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("after")) {
+			
+			instant = Instant.parse(time);
 
+			dateTime = new JsonObject();
+			dateTime.put("$date", instant);
+			
 			query.put("__resource-id", resource_id);
-			isotime.put("$gte", time);
-			query.put("LASTUPDATEDATETIME", isotime);
+			isotime.put("$gte", dateTime);
+			query.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("TEquals")) {
 
+			instant = Instant.parse(time);
+
+			dateTime = new JsonObject();
+			dateTime.put("$date", instant);
+
 			query.put("__resource-id", resource_id);
-			isotime.put("$eq", time);
-			query.put("LASTUPDATEDATETIME", isotime);
+			isotime.put("$eq", dateTime);
+			query.put("__time", isotime);
 
 		}
 
