@@ -305,9 +305,117 @@ public class SubscriptionVerticle extends AbstractVerticle
 
 	private void callback(Message<JsonObject> message)
 	{
-		//Same steps as stream. The last step will publish to callback_url instead of to the broker
+	    JsonObject  messageBody	=   message.body();
+	    String	username	=   messageBody.getString("username");
+	    String	callbackUrl	=   messageBody.getString("callbackUrl");
+	    JsonArray   resourceIds	=   messageBody.getJsonArray("resourceIds");
 		
-		message.reply("ok");
+	    checkRegistration(username)
+	    .setHandler(register -> {
+	    
+		if(!register.succeeded())
+		{
+		    message.reply(null);
+		}
+
+		String subscriptionId	=   RandomStringUtils
+					    .random(8, 0, PASSWORDCHARS.length(),
+					    true, true, PASSWORDCHARS.toCharArray());
+
+		JsonObject document	=   new JsonObject();
+
+		document.put("username", username);
+		document.put("resourceIds", resourceIds);
+		document.put("type", "stream");
+		document.put("subscriptionId", subscriptionId);
+		document.put("callbackUrl", callbackUrl);
+		document.put("status", "processing");
+		    
+		mongo.insert("subscriptions", document, res -> {
+		
+		    if(!res.succeeded())
+		    {
+			message.reply(null);
+		    }
+
+		    String  result[]	=   register.result().split(",");
+		    String  entityId	=   result[0].replace("/", "%2f");
+		    String  apikey	=   result[1];
+
+		    //Strip https from url
+		    String  urlNoHttps	=   resource_server_url
+					    .substring(8, resource_server_url.length());
+
+		    String  amqpUrl	=   "amqp://"		+   
+					    entityId		+   
+					    ":"			+	
+					    apikey		+   
+					    "@"			+   
+					    urlNoHttps		+   
+					    ":5672"		+
+					    "/%2f";
+
+
+		    message.reply("ok");
+
+		    asyncOp(username, resourceIds, "bind")
+		    .setHandler(bind -> {
+		    
+			if(!bind.succeeded())
+			{
+			    JsonObject update =	new JsonObject();
+
+			    logger.info(bind.cause());
+			    update.put("$set",new JsonObject().put("status", "errored"));
+
+			    //TODO: What if this fails?
+			    mongo.updateCollection("subscriptions", document, update, resp -> {});
+			}
+			else
+			{
+			    JsonObject body =	new JsonObject();
+
+			    body.put("amqpUrl", amqpUrl);
+			    body.put("subscriptionId", subscriptionId);
+		
+			    //TODO: Use vertx.executeBlocking
+			    try
+			    {
+				//TODO: Add support for apikeys and auth mechanisms
+				logger.info("Callback url="+callbackUrl);
+
+				URL		    url =   new URL(callbackUrl);
+				HttpURLConnection   con =	(HttpURLConnection) url.openConnection();
+
+				con.setRequestMethod("POST");
+				con.setRequestProperty("Content-Type", "application/json; utf-8");
+				con.setDoOutput(true);
+				con.getOutputStream().write(body.encode().getBytes("UTF-8"));
+
+				logger.info("Response code="+con.getResponseCode());
+				
+				JsonObject update =	new JsonObject();
+
+				update.put("$set",new JsonObject().put("status", "succeeded"));
+
+				//TODO: What if this fails?
+				mongo.updateCollection("subscriptions", document, update, resp -> {});
+			    }
+			    catch(Exception e)
+			    {
+				JsonObject update =	new JsonObject();
+
+				update.put("$set",new JsonObject().put("status", "errored-during-callback"));
+
+				//TODO: What if this fails?
+				mongo.updateCollection("subscriptions", document, update, resp -> {});
+
+				e.printStackTrace();
+			    }
+			}
+		    });
+		});
+	    });
 	}
 	
 	private Future<String> checkRegistration(String username)

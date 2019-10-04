@@ -448,12 +448,12 @@ public class APIServerVerticle extends AbstractVerticle {
 			    return;
 			}
 			
-			String callbackUrl  =	body.getString("callback_url");
+			String callbackUrl  =	body.getString("callbackUrl");
 			
 			options.addHeader("type", "callback");
 			message.put("username",username);
 			message.put("resourceIds",resourceIds);
-			message.put("calback_url", callbackUrl);
+			message.put("callbackUrl", callbackUrl);
 			
 			vertx.eventBus().send("subscription", message, options, reply -> {
 				
@@ -463,7 +463,7 @@ public class APIServerVerticle extends AbstractVerticle {
 				return;
 			    }
 				
-			    response.setStatusCode(200).end();
+			    response.setStatusCode(202).end();
 				
 			});
 		}
@@ -500,7 +500,6 @@ public class APIServerVerticle extends AbstractVerticle {
 					.end(responseJson.encodePrettily());
 				return;
 			    }
-
 			});
 		}
 	}
