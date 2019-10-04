@@ -79,6 +79,8 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		router.delete(basepath + "/subscriptions/:subId").handler(this::deleteSubscription);
 
+		router.put(basepath + "/subscriptions/:subId").handler(this::updateSubscription);
+
 		server = vertx.createHttpServer(new HttpServerOptions().setSsl(true)
 				.setKeyStoreOptions(new JksOptions().setPath("my-keystore.jks").setPassword("password")));
 
@@ -400,6 +402,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		});
 	}
 	
+	//TODO: Handle validation, bad requests and sanitise inputs
 	private void subscriptionsRouter(RoutingContext context)
 	{
 		HttpServerResponse  response	=   context.response();
@@ -567,6 +570,65 @@ public class APIServerVerticle extends AbstractVerticle {
 		else
 		{
 		    response.setStatusCode(204).end();
+		    return;
+		}
+	    });
+	}
+
+	private void updateSubscription(RoutingContext context)
+	{
+	    HttpServerResponse  response	=   context.response();
+	    HttpServerRequest   request		=   context.request();
+	    DeliveryOptions	options		=   new DeliveryOptions();
+	    JsonObject		message		=   new JsonObject();
+	    JsonObject		body;
+	    String		subscriptionId	=   context.request().getParam("subId");
+		
+	    try
+	    {
+	        body = context.getBodyAsJson();
+	    }
+	    catch(Exception e)
+	    {
+	        response.setStatusCode(400).end("Body is not a valid JSON");
+	        return;
+	    }
+		
+	    //Replace this with TIP
+	    String username	=   request.headers().get("username");
+		
+	    //Input validation
+	    if  (   (username	==	null)
+		    		||
+		    (!body.containsKey("resourceIds"))
+		)
+	    {
+		response.setStatusCode(400).end("Missing fields in header or body");
+		return;
+	    }
+		
+	    JsonArray resourceIds	    =	body.getJsonArray("resourceIds");
+		
+	    logger.info(resourceIds.toString());
+
+	    options.addHeader("type", "update");
+	    message.put("username", username);
+	    message.put("subscriptionId", subscriptionId);
+	    message.put("resourceIds", resourceIds);
+
+	    vertx.eventBus().send("subscription", message, options, reply -> {
+		
+		if  (	    (!reply.succeeded())
+				    ||
+			(reply.result().body()  ==  null)
+		    )
+		{
+		    response.setStatusCode(500).end("Internal server error");
+		    return;
+		}
+		else
+		{
+		    response.setStatusCode(200).end();
 		    return;
 		}
 	    });

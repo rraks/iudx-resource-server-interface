@@ -139,6 +139,9 @@ public class SubscriptionVerticle extends AbstractVerticle
 		    case "delete":
 			deleteStream(message);
 			break;
+		    case "update":
+			updateSubscription(message);
+			break;
 		}
 	}
 	
@@ -524,6 +527,98 @@ public class SubscriptionVerticle extends AbstractVerticle
 	    JsonObject	json	=   res.result().get(0); 
 	    json.remove("_id");
 	    message.reply(json);
+	});
+    }
+    
+    private void updateSubscription(Message<JsonObject> message)
+    {
+   	JsonObject  messageBody	    =   message.body();
+   	String	    username	    =   messageBody.getString("username");
+   	String	    subscriptionId  =   messageBody.getString("subscriptionId");
+   	JsonArray   newResourceIds  =   messageBody.getJsonArray("resourceIds");
+   	    
+   	checkRegistration(username)
+   	.setHandler(register -> {
+   	
+   	    if(!register.succeeded())
+   	    {
+   	        message.reply(null);
+		return;
+   	    }
+	
+	    JsonObject query = new JsonObject();
+
+	    query.put("username", username);
+	    query.put("subscriptionId", subscriptionId);
+
+	    //What about using findOne?
+	    mongo.find("subscriptions", query, find -> {
+			
+	    if (!find.succeeded()) 
+	    {
+		logger.error(find.cause());
+		message.reply(null);
+		return;
+	    }
+
+	    JsonObject	json		    =   find.result().get(0); 
+	    JsonArray	oldResourceIds	    =   json.getJsonArray("resourceIds");
+   	    JsonObject	subscriptionUpdate  =	new JsonObject();
+   	    
+	    subscriptionUpdate.put("$set",new JsonObject().put("resourceIds", newResourceIds));
+
+   	    mongo.update("subscriptions", query, subscriptionUpdate, updateMongo -> {
+   	    
+   	        if(!updateMongo.succeeded())
+   	        {
+		    logger.error(updateMongo.cause());
+		    message.reply(null);
+		    return;
+   	        }
+		
+		//Reply to the message and let the expensive ops happen async
+		message.reply("ok");
+
+   	        asyncOp(username, oldResourceIds, "unbind")
+   	        .setHandler(unbind -> {
+   	        
+   	    	if(!unbind.succeeded())
+   	    	{
+   	    	    JsonObject update =	new JsonObject();
+
+   	    	    logger.info(unbind.cause());
+   	    	    update.put("$set",new JsonObject().put("status", "errored-while-updating"));
+
+   	    	    //TODO: What if this fails?
+   	    	    mongo.updateCollection("subscriptions", json, update, resp -> {});
+   	    	}
+   	    	else
+   	    	{
+		    asyncOp(username, newResourceIds, "bind")
+		    .setHandler(bind -> {
+		    
+			if(!bind.succeeded())
+			{
+			    JsonObject update =	new JsonObject();
+
+			    logger.info(bind.cause());
+			    update.put("$set",new JsonObject().put("status", "errored-while-updating"));
+
+			    //TODO: What if this fails?
+			    mongo.updateCollection("subscriptions", json, update, resp -> {});
+			}
+
+			JsonObject update =	new JsonObject();
+
+			update.put("$set",new JsonObject().put("status", "succeeded"));
+
+			//TODO: What if this fails?
+			mongo.updateCollection("subscriptions", json, update, resp -> {});
+		    });
+		 }
+   	        });
+	    });
+	  });
 	});
     }
 }
