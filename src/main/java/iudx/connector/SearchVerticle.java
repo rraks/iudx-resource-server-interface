@@ -92,12 +92,12 @@ public class SearchVerticle extends AbstractVerticle {
 	    } 
 	    
 		mongoconfig		= 	new JsonObject()
-							.put("username", database_user)
-							.put("password", database_password)
-							.put("authSource", auth_database)
-							.put("host", database_host)
-							.put("port", database_port)
-							.put("db_name", database_name);
+						.put("username", database_user)
+						.put("password", database_password)
+						.put("authSource", auth_database)
+						.put("host", database_host)
+						.put("port", database_port)
+						.put("db_name", database_name);
 
 		mongo = MongoClient.createShared(vertx, mongoconfig);
 	}

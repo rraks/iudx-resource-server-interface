@@ -133,6 +133,12 @@ public class SubscriptionVerticle extends AbstractVerticle
 		    case "callback":
 			callback(message);
 			break;
+		    case "status":
+			status(message);
+			break;
+		    case "delete":
+			deleteStream(message);
+			break;
 		}
 	}
 	
@@ -205,15 +211,7 @@ public class SubscriptionVerticle extends AbstractVerticle
 
 		    message.reply(amqpUrl+","+subscriptionId);
 
-		    //ArrayList<String>	resourceIdList	=   new ArrayList<String>();
-		    //
-		    ////Stupid way, I know
-		    //for (int i=0;i<resourceIds.size();i++)
-		    //{
-		    //    resourceIdList.add(resourceIds.getString(i));
-		    //}
-		    
-		    asyncBind(username, resourceIds)
+		    asyncOp(username, resourceIds, "bind")
 		    .setHandler(bind -> {
 		    
 			if(!bind.succeeded())
@@ -234,13 +232,74 @@ public class SubscriptionVerticle extends AbstractVerticle
 
 			    //TODO: What if this fails?
 			    mongo.updateCollection("subscriptions", document, update, resp -> {});
-
 			}
 		    });
 		});
 	    });
 	}
 	
+	private void deleteStream(Message<JsonObject> message)
+	{
+	    JsonObject  messageBody	=   message.body();
+	    String	username	=   messageBody.getString("username");
+	    String	subscriptionId	=   messageBody.getString("subscriptionId");
+		
+	    checkRegistration(username)
+	    .setHandler(register -> {
+	    
+		if(!register.succeeded())
+		{
+		    message.reply(null);
+		}
+
+		JsonObject document	=   new JsonObject();
+
+		document.put("username", username);
+		document.put("subscriptionId", subscriptionId);
+		    
+		mongo.find("subscriptions", document, res -> {
+		
+		    if(!res.succeeded())
+		    {
+			message.reply(null);
+		    }
+
+		    JsonObject	queryResult =	res.result().get(0);
+
+		    if(queryResult.size() == 0)
+		    {
+			message.reply(null);
+			return;
+		    }
+
+		    JsonArray	resourceIds =	queryResult.getJsonArray("resourceIds");
+
+		    message.reply("ok");
+
+		    asyncOp(username, resourceIds, "unbind")
+		    .setHandler(op -> {
+		    
+			//Need to handle this properly
+			if(!op.succeeded())
+			{
+			    JsonObject update   =	new JsonObject();
+
+			    logger.info(op.cause());
+			    update.put("$set",new JsonObject().put("status", "errored-while-deleting"));
+
+			    //TODO: What if this fails?
+			    mongo.updateCollection("subscriptions", document, update, resp -> {});
+			}
+			else
+			{
+			    //TODO: What if this fails?
+			    mongo.removeDocument("subscriptions", document, delete -> {});
+			}
+		    });
+		});
+	    });
+	}
+
 	private void callback(Message<JsonObject> message)
 	{
 		//Same steps as stream. The last step will publish to callback_url instead of to the broker
@@ -314,6 +373,7 @@ public class SubscriptionVerticle extends AbstractVerticle
 
 			query.put("username", username);
 
+			//What about using findOne?
 			mongo.find("apikeys", query, res -> {
 			
 			    if (!res.succeeded()) 
@@ -372,14 +432,13 @@ public class SubscriptionVerticle extends AbstractVerticle
 				e.printStackTrace();
 			}
 		}
-		
 		return pool.get(token);
 	}
 
 	//TODO: Use executeBlocking here as well
 	//TODO: Add support for message type 
 	//TODO: Add support for routing key
-	public Future<Void> asyncBind(String username, JsonArray resourceIds)
+	public Future<Void> asyncOp(String username, JsonArray resourceIds, String type)
 	{
 	    Promise promise =	Promise.promise();
 
@@ -412,8 +471,8 @@ public class SubscriptionVerticle extends AbstractVerticle
 		    logger.info("resourceName="+resourceName);
 
 	    	    String resourceNameHash =	Hashing.sha1()
-						.hashString (	resourceName, 
-								StandardCharsets.UTF_8
+						.hashString(resourceName, 
+							    StandardCharsets.UTF_8
 							    )
 						.toString();
 
@@ -422,7 +481,14 @@ public class SubscriptionVerticle extends AbstractVerticle
 							resourceNameHash    +
 							".public";
 
-	    	    getAdminChannel().queueBind("admin/"+userHash, requestedResourceName, "#");
+		    if(type.equalsIgnoreCase("bind"))
+		    {
+			getAdminChannel().queueBind("admin/"+userHash, requestedResourceName, "#");
+		    }
+		    else if(type.equalsIgnoreCase("unbind"))
+		    {
+			getAdminChannel().queueUnbind("admin/"+userHash, requestedResourceName, "#");
+		    }
 	    	}
 
 		promise.complete();
@@ -434,4 +500,30 @@ public class SubscriptionVerticle extends AbstractVerticle
 	    }
 	    return promise.future();
 	}
+    
+    private void status(Message<JsonObject> message)
+    {
+	JsonObject	messageBody	=   message.body();
+	String		username	=   messageBody.getString("username");
+	String		subscriptionId	=   messageBody.getString("subscriptionId");
+
+	JsonObject query = new JsonObject();
+
+	query.put("username", username);
+	query.put("subscriptionId", subscriptionId);
+
+	//What about using findOne?
+	mongo.find("subscriptions", query, res -> {
+			
+	    if (!res.succeeded()) 
+	    {
+		logger.error(res.cause());
+		message.reply(null);
+	    }
+
+	    JsonObject	json	=   res.result().get(0); 
+	    json.remove("_id");
+	    message.reply(json);
+	});
+    }
 }

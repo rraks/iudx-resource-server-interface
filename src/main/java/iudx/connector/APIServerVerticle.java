@@ -75,6 +75,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		router.post(basepath + "/download").handler(this::search);
 		router.post(basepath + "/metrics").handler(this::metrics);
 
+		router.get(basepath + "/subscriptions/:subId").handler(this::subscriptionStatus);
+
+		router.delete(basepath + "/subscriptions/:subId").handler(this::deleteSubscription);
+
 		server = vertx.createHttpServer(new HttpServerOptions().setSsl(true)
 				.setKeyStoreOptions(new JksOptions().setPath("my-keystore.jks").setPassword("password")));
 
@@ -420,7 +424,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		//Input validation
 		if  (	(username	==	null)
 					||
-			(!body.containsKey("resource-ids"))
+			(!body.containsKey("resourceIds"))
 					||
 			(!body.containsKey("type"))
 		    )
@@ -429,18 +433,15 @@ public class APIServerVerticle extends AbstractVerticle {
 		    return;
 		}
 		
-		JsonArray resourceIds	    =	body.getJsonArray("resource-ids");
-		//String idList		    =	idListArray.encode();
-		//idList		    =	idList.substring(1,idList.length()-1);
-		//List<String> resourceIds  =	Arrays.asList(idList.split(","));
+		JsonArray resourceIds	    =	body.getJsonArray("resourceIds");
 		
 		logger.info(resourceIds.toString());
 		
 		if(body.getString("type").equals("callback"))
 		{
-			if(!body.containsKey("callback_url"))
+			if(!body.containsKey("callbackUrl"))
 			{
-			    response.setStatusCode(400).end("Missing callback_url");
+			    response.setStatusCode(400).end("Missing callbackUrl");
 			    return;
 			}
 			
@@ -494,9 +495,80 @@ public class APIServerVerticle extends AbstractVerticle {
 			    	response.putHeader("content-type", "application/json")
 					.setStatusCode(201)
 					.end(responseJson.encodePrettily());
+				return;
 			    }
 
 			});
 		}
+	}
+
+	private void subscriptionStatus(RoutingContext context)
+	{
+	    HttpServerResponse  response	=   context.response();
+	    HttpServerRequest	request		=   context.request();
+	    String		subscriptionId	=   context.request().getParam("subId");
+	    
+	    //Replace this with TIP results
+	    String		username	=   request.headers().get("username");
+	    DeliveryOptions	options		=   new DeliveryOptions();
+	    JsonObject		message		=   new JsonObject();
+
+	    options.addHeader("type", "status");
+	    message.put("username", username);
+	    message.put("subscriptionId", subscriptionId);
+
+	    vertx.eventBus().send("subscription", message, options, reply -> {
+		
+		if  (	    (!reply.succeeded())
+				    ||
+			(reply.result().body()  ==  null)
+		    )
+		{
+		    response.setStatusCode(500).end("Internal server error");
+		    return;
+		}
+		else
+		{
+		    JsonObject replyJson    =	(JsonObject)reply.result().body();
+		    
+		    response.putHeader("content-type", "application/json")
+			    .setStatusCode(200)
+			    .end(replyJson.encodePrettily());
+		    return;
+		}
+	    });
+	}
+
+	private void deleteSubscription(RoutingContext context)
+	{
+	    HttpServerResponse  response	=   context.response();
+	    HttpServerRequest	request		=   context.request();
+	    String		subscriptionId	=   context.request().getParam("subId");
+	    
+	    //Replace this with TIP results
+	    String		username	=   request.headers().get("username");
+	    DeliveryOptions	options		=   new DeliveryOptions();
+	    JsonObject		message		=   new JsonObject();
+
+	    options.addHeader("type", "delete");
+	    message.put("username", username);
+	    message.put("subscriptionId", subscriptionId);
+
+	    vertx.eventBus().send("subscription", message, options, reply -> {
+		
+		if  (	    (!reply.succeeded())
+				    ||
+			(reply.result().body()  ==  null)
+		    )
+		{
+		    response.setStatusCode(500).end("Internal server error");
+		    return;
+		}
+		else
+		{
+		    response.setStatusCode(204).end();
+		    return;
+		}
+	    });
 	}
 }

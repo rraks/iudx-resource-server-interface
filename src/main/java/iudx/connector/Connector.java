@@ -44,13 +44,13 @@ public class Connector extends AbstractVerticle {
 			deployHelper(SubscriptionVerticle.class.getName())
 			.setHandler(subscription -> {
 				
-				if(!subscription.succeeded())
-				{
-					logger.debug(metrics.cause());
-					startFuture.fail(subscription.cause().toString());
-				}
+			if(!subscription.succeeded())
+			{
+			    logger.debug(metrics.cause());
+			    startFuture.fail(subscription.cause().toString());
+			}
 				
-				startFuture.complete();
+			startFuture.complete();
 					});
 				});
 			});
