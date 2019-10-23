@@ -49,8 +49,19 @@ public class Connector extends AbstractVerticle {
 			    logger.debug(metrics.cause());
 			    startFuture.fail(subscription.cause().toString());
 			}
+			
+			deployHelper(ValidityVerticle.class.getName())
+			.setHandler(validity -> {
 				
+			if(!validity.succeeded())
+			{
+			    logger.debug(validity.cause());
+			    startFuture.fail(validity.cause().toString());
+			}
+			
 			startFuture.complete();
+			
+						});
 					});
 				});
 			});

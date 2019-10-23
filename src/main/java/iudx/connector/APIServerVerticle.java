@@ -12,10 +12,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.http.HttpHeaders;
@@ -24,6 +26,7 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
@@ -42,7 +45,10 @@ public class APIServerVerticle extends AbstractVerticle {
 	private HashMap<String, String> upstream;
 	int state;
 	JsonObject metrics;
-
+	ConcurrentHashMap<String,Integer> validity = new ConcurrentHashMap<String,Integer>();
+	String ip;
+	int count;
+	
 	@Override
 	public void start() {
 
@@ -91,90 +97,107 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void search(RoutingContext routingContext) {
-
-		HttpServerResponse response = routingContext.response();
-
-		JsonObject requested_data = new JsonObject();
-		DeliveryOptions options = new DeliveryOptions();
-		requested_data = routingContext.getBodyAsJson();
-		api = "search";
-		event = "search";
-		metrics = new JsonObject();
 		
-		TimeZone tz = TimeZone.getTimeZone("UTC");
-		DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
-		df.setTimeZone(tz);
-		String nowAsISO = df.format(new Date());
-
-		metrics.put("time", nowAsISO);
-
-		metrics.put("endpoint", api);
+		Future<Void> validity = validateRequest(routingContext, "search");
 		
-		switch (decoderequest(requested_data)) {
+		validity.setHandler(validationResultHandler -> {
+			
+			HttpServerResponse response = routingContext.response();
+			
+			if(validationResultHandler.succeeded()) 
+			{
+				JsonObject requested_data = new JsonObject();
+				DeliveryOptions options = new DeliveryOptions();
+				requested_data = routingContext.getBodyAsJson();
+				api = "search";
+				event = "search";
+				metrics = new JsonObject();
+				
+				TimeZone tz = TimeZone.getTimeZone("UTC");
+				DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
+				df.setTimeZone(tz);
+				String nowAsISO = df.format(new Date());
 
-		case 0:
-			break;
+				metrics.put("time", nowAsISO);
 
-		case 1:
+				metrics.put("endpoint", api);
+				
+				metrics.put("ip", ip);
+				
+				switch (decoderequest(requested_data)) {
 
-			if (requested_data.getString("options").contains("latest")) {
-				logger.info("case-1: latest data for an item in group");
-				options.addHeader("state", Integer.toString(state));
-				options.addHeader("options", "latest");
-				publishEvent(event, requested_data, options, response);
+				case 0:
+					break;
+
+				case 1:
+
+					if (requested_data.getString("options").contains("latest")) {
+						logger.info("case-1: latest data for an item in group");
+						options.addHeader("state", Integer.toString(state));
+						options.addHeader("options", "latest");
+						publishEvent(event, requested_data, options, response);
+					}
+
+					else if (requested_data.getString("options").contains("status")) {
+						logger.info("case-1: status for an item in group");
+						options.addHeader("state", Integer.toString(state));
+						options.addHeader("options", "status");
+						publishEvent(event, requested_data, options, response);			
+					}
+
+					
+					break;
+
+				case 2:
+					logger.info("case-2: latest data for all the items in group");
+					options.addHeader("state", Integer.toString(state));
+					publishEvent(event, requested_data, options, response);
+					break;
+
+				case 3:
+					logger.info("case-3: time-series data for an item in group");
+					options.addHeader("state", Integer.toString(state));
+					publishEvent(event, requested_data, options, response);
+					break;
+
+				case 4:
+					break;
+					
+				case 5:
+					logger.info("case-5: geo search for an item group");
+					options.addHeader("state", Integer.toString(state));
+					publishEvent(event, requested_data, options, response);
+					break;			
+					
+				case 7:
+					logger.info("case-7: geo search(bbox) for an item group");
+					options.addHeader("state", "7");
+					publishEvent(event,requested_data, options, response);
+					break;			
+
+				case 8:
+					logger.info("case-8: geo search(Polygon/LineString) for an item group");
+					options.addHeader("state", "8");
+					publishEvent(event,requested_data, options, response);
+					break;			
+
+
+				case 11:
+					logger.info("case-11: attribute search for resource for an item group");
+					options.addHeader("state","11");
+					publishEvent(event,requested_data,options,response);
+					break;
+
+				}
+			
 			}
-
-			else if (requested_data.getString("options").contains("status")) {
-				logger.info("case-1: status for an item in group");
-				options.addHeader("state", Integer.toString(state));
-				options.addHeader("options", "status");
-				publishEvent(event, requested_data, options, response);			
+			
+			else 
+			{
+				handle429(response);
 			}
-
 			
-			break;
-
-		case 2:
-			logger.info("case-2: latest data for all the items in group");
-			options.addHeader("state", Integer.toString(state));
-			publishEvent(event, requested_data, options, response);
-			break;
-
-		case 3:
-			logger.info("case-3: time-series data for an item in group");
-			options.addHeader("state", Integer.toString(state));
-			publishEvent(event, requested_data, options, response);
-			break;
-
-		case 4:
-			break;
-			
-		case 5:
-			logger.info("case-5: geo search for an item group");
-			options.addHeader("state", Integer.toString(state));
-			publishEvent(event, requested_data, options, response);
-			break;			
-			
-		case 7:
-			logger.info("case-7: geo search(bbox) for an item group");
-			options.addHeader("state", "7");
-			publishEvent(event,requested_data, options, response);
-			break;			
-
-		case 8:
-			logger.info("case-8: geo search(Polygon/LineString) for an item group");
-			options.addHeader("state", "8");
-			publishEvent(event,requested_data, options, response);
-			break;			
-
-
-		case 11:
-			logger.info("case-11: attribute search for resource for an item group");
-			options.addHeader("state","11");
-			publishEvent(event,requested_data,options,response);
-			break;
-
-		}
+		});
 	}
 
 	private void count(RoutingContext routingContext) {
@@ -354,8 +377,13 @@ public class APIServerVerticle extends AbstractVerticle {
 		response.setStatusCode(200).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json")
 				.end(replyHandler.result().body().toString());
 		updatemetrics(requested_data, metrics);
+		updatevalidity(metrics);
 	}
 
+	private void handle429(HttpServerResponse response) {
+		response.setStatusCode(429).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+	}
+	
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
 
 		metrics.put("api", api);
@@ -632,4 +660,59 @@ public class APIServerVerticle extends AbstractVerticle {
 		}
 	    });
 	}
+
+	private Future<Void> validateRequest(RoutingContext routingContext, String api) {
+		// TODO Auto-generated method stub
+
+		Future<Void> validation = Future.future();
+
+		ip = routingContext.request().remoteAddress().host();
+
+		if (validity.containsKey(ip)) {
+			count = validity.get(ip);
+		} else {
+			count = 0;
+		}
+
+		if (count <= 50) {
+			validation.complete();
+			count = count + 1;
+			validity.put(ip, count);
+			logger.info("User from IP " + ip + " Accessed APIs for " + count + " times.");
+		} else {
+			validation.fail("failed");
+			logger.info("User from IP " + ip + " Accessed APIs for " + count + " times.");
+		}
+
+		return validation;
+
+	}
+
+	private void updatevalidity(JsonObject metrics) {
+		logger.info("Metrics is : " + metrics);
+
+		vertx.eventBus().send("update-limit-on-ip", metrics, replyHandler -> {
+
+			if (replyHandler.succeeded()) {
+				logger.info("update-limit-on-ip : SUCCESS");
+
+				vertx.eventBus().send("get-limit-on-ip", metrics, limit_count_replyHandler -> {
+
+					if (limit_count_replyHandler.succeeded()) {
+
+						JsonObject response = (JsonObject) limit_count_replyHandler.result().body();
+						count = response.getInteger("count");
+						validity.put(ip, count);
+
+					}
+				});
+			}
+
+			else {
+				logger.info("update-limit-on-ip : FAILED");
+			}
+		});
+
+	}
+
 }
