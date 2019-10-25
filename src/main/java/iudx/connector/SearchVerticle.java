@@ -274,7 +274,8 @@ public class SearchVerticle extends AbstractVerticle {
 			query.put("__time", isotime);
 
 		}
-
+		System.out.println(query);
+		
 		return query;
 
 	}

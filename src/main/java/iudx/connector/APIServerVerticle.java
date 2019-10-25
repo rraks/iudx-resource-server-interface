@@ -1,20 +1,28 @@
 package iudx.connector;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.Principal;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.http.ClientAuth;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
@@ -33,6 +41,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 	private static final Logger logger = Logger.getLogger(APIServerVerticle.class.getName());
 	private HttpServer server;
+	private ClientAuth clientAuth ;
 	private final int port = 443;
 	private final String basepath = "/resource-server/pscdcl/v1";
 	private String event, api;
@@ -43,11 +52,25 @@ public class APIServerVerticle extends AbstractVerticle {
 	String ip;
 	int count;
 
-
+	private String keystore, keystorePassword, truststore, truststorePassword;
+	
 	private TimeZone tz;
 	private DateFormat df; 
 	private Calendar now;
 	
+	private boolean status;
+	private Principal cn;
+
+	private String certificateClass[];
+	private String classLevel;
+	private String emailID;
+	private String onboarder;
+	private String designation;
+	private String[] oidClass;
+	private String level;
+	
+	private static int totalRequestsPerDay; 
+
 	@Override
 	public void start() {
 
@@ -86,8 +109,42 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		router.put(basepath + "/subscriptions/:subId").handler(this::updateSubscription);
 
-		server = vertx.createHttpServer(new HttpServerOptions().setSsl(true)
-				.setKeyStoreOptions(new JksOptions().setPath("my-keystore.jks").setPassword("password")));
+		Properties prop = new Properties();
+	    InputStream input = null;
+	    
+	    try {
+
+	        input = new FileInputStream("config.properties");
+	        prop.load(input);
+
+	        keystore 	=	prop.getProperty("keystore");
+	        keystorePassword = prop.getProperty("keystorePassword");
+
+			truststore = prop.getProperty("truststore");
+			truststorePassword = prop.getProperty("truststorePassword");
+ 	        	        
+	    } catch (IOException ex) {
+	        ex.printStackTrace();
+	    } finally {
+	        if (input != null) {
+	            try {
+	                input.close();
+	            } catch (IOException e) {
+	                e.printStackTrace();
+	            }
+	        }
+	    }
+		
+		clientAuth = ClientAuth.REQUEST;
+
+		server =
+		        vertx.createHttpServer(
+		            new HttpServerOptions()
+		                .setSsl(true)
+		                .setClientAuth(clientAuth)
+		                .setTrustStoreOptions(new JksOptions().setPath(truststore).setPassword(truststorePassword))
+		                .setKeyStoreOptions(
+		                    new JksOptions().setPath(keystore).setPassword(keystorePassword)));
 
 		server.requestHandler(router::accept).listen(port);
 
@@ -100,6 +157,17 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void search(RoutingContext routingContext) {
+		
+		
+		
+		if(decodeCertificate(routingContext))
+		{
+			totalRequestsPerDay = 500;
+		}
+		else 
+		{
+			totalRequestsPerDay = 50; 
+		}
 		
 		Future<Void> validity = validateRequest(routingContext, "search");
 		
@@ -682,14 +750,16 @@ public class APIServerVerticle extends AbstractVerticle {
 			count = 0;
 		}
 
-		if (count <= 50) {
+		if (count <= totalRequestsPerDay) {
 			validation.complete();
 			count = count + 1;
 			validity.put(ip, count);
 			logger.info("User from IP " + ip + " Accessed APIs for " + count + " times.");
+			logger.info("Allowed requests per day is : " +totalRequestsPerDay);
 		} else {
 			validation.fail("failed");
 			logger.info("User from IP " + ip + " Accessed APIs for " + count + " times.");
+			logger.info("Allowed requests per day is : " +totalRequestsPerDay);
 		}
 
 		return validation;
@@ -721,6 +791,32 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 		});
 
+	}
+	
+	private boolean decodeCertificate(RoutingContext routingContext) {
+
+		status = false;
+		
+		try {
+			cn = routingContext.request().connection().sslSession().getPeerPrincipal();
+
+			certificateClass = cn.toString().split(",");
+			classLevel = certificateClass[0];
+			emailID = certificateClass[8].split("=")[1];
+			onboarder = certificateClass[1];
+			designation = onboarder.split("=")[1];
+			oidClass = classLevel.split("=");
+			level = oidClass[1].split(":")[1];
+
+			status = true;
+
+			logger.info("e-mail : " + emailID + " : designation : " + designation + " : class level : " + level  );
+			
+		} catch (SSLPeerUnverifiedException e) {
+			status = false;
+		}
+
+		return status;
 	}
 
 }
