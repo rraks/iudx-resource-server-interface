@@ -3,11 +3,16 @@ package iudx.connector;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.Properties;
+import java.util.TimeZone;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -29,6 +34,10 @@ public class ValidityVerticle extends AbstractVerticle {
 	private String 		database_name;
 	private String 		auth_database;
 
+	private TimeZone tz;
+	private DateFormat df; 
+	private Calendar now;
+		
 	@Override
 	public void start() throws Exception {
 
@@ -89,6 +98,10 @@ public class ValidityVerticle extends AbstractVerticle {
 							.put("db_name", database_name);
 
 		mongo = MongoClient.createShared(vertx, mongoconfig);
+		
+		tz = TimeZone.getTimeZone("UTC");
+		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); 
+		df.setTimeZone(tz);
 
 	}
 
@@ -145,19 +158,48 @@ public class ValidityVerticle extends AbstractVerticle {
 	private JsonObject constructQuery(int state, JsonObject requested_data) {
 
 		JsonObject query = new JsonObject();
-		JsonArray expressions = new JsonArray();
 
 		switch (state) {
 
 		case 1:
 			query.put("ip", requested_data.getString("ip"));
-			expressions.add(query);
+			
+			now = new GregorianCalendar();
+			now.set(Calendar.HOUR, 0);
+	        now.set(Calendar.MINUTE, 0);
+	        now.set(Calendar.SECOND, 0);
+	        now.set(Calendar.MILLISECOND, 0);
+
+			String todayAsISO = df.format(now.getTime()); // df.format(new Date());
+			logger.info("Todays Date Time : " + todayAsISO);
+			
+			Instant startInstant = Instant.parse(todayAsISO);
+
+			JsonObject startDateTime = new JsonObject();
+			startDateTime.put("$date", startInstant);
+
+			String nowAsISO = requested_data.getJsonObject("time").getString("$date");
+			logger.info("Current Date Time : " + nowAsISO);
+						
+			Instant endInstant = Instant.parse(nowAsISO.trim());
+
+			JsonObject endDateTime = new JsonObject();
+			endDateTime.put("$date", endInstant);
+			
+			isotime = new JsonObject();
+			
+			isotime.put("$gte", startDateTime);
+			isotime.put("$lte", endDateTime);
+			
+			query.put("time", isotime);
+			
+			logger.info(query);
+			
 			break;
 		}
 
-		query = new JsonObject();
-		query.put("$and", expressions);
-
+		
+		
 		return query;
 	}
 

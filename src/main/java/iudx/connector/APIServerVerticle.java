@@ -2,14 +2,9 @@ package iudx.connector;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
-import java.util.Date;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +21,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
@@ -48,6 +42,11 @@ public class APIServerVerticle extends AbstractVerticle {
 	ConcurrentHashMap<String,Integer> validity = new ConcurrentHashMap<String,Integer>();
 	String ip;
 	int count;
+
+
+	private TimeZone tz;
+	private DateFormat df; 
+	private Calendar now;
 	
 	@Override
 	public void start() {
@@ -94,6 +93,10 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		logger.info("IUDX Connector started at Port : " + port + " !");
 
+		tz = TimeZone.getTimeZone("UTC");
+		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); 
+		df.setTimeZone(tz);
+		
 	}
 
 	private void search(RoutingContext routingContext) {
@@ -113,13 +116,11 @@ public class APIServerVerticle extends AbstractVerticle {
 				event = "search";
 				metrics = new JsonObject();
 				
-				TimeZone tz = TimeZone.getTimeZone("UTC");
-				DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
-				df.setTimeZone(tz);
-				String nowAsISO = df.format(new Date());
-
-				metrics.put("time", nowAsISO);
-
+				now = Calendar.getInstance();
+				String nowAsISO = df.format(now.getTime()); 
+				
+				metrics.put("time", new JsonObject().put("$date", nowAsISO));
+				
 				metrics.put("endpoint", api);
 				
 				metrics.put("ip", ip);
@@ -210,7 +211,11 @@ public class APIServerVerticle extends AbstractVerticle {
 		event = "search"; 
 		
 		metrics = new JsonObject();
-		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT));
+
+		now = Calendar.getInstance();
+		String nowAsISO = df.format(now.getTime()); 
+		
+		metrics.put("time", new JsonObject().put("$date", nowAsISO));
 		metrics.put("endpoint", api);
 		
 		switch (decoderequest(requested_data)) {
@@ -264,8 +269,11 @@ public class APIServerVerticle extends AbstractVerticle {
 		event = "get-metrics"; 
 
 		metrics = new JsonObject();
-		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		
+		now = Calendar.getInstance();
+		String nowAsISO = df.format(now.getTime()); 
+		
+		metrics.put("time", new JsonObject().put("$date", nowAsISO));
 
 		publishEvent(event, requested_data, options, response);
 		
