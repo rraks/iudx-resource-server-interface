@@ -21,7 +21,7 @@ import io.vertx.ext.mongo.MongoClient;
 public class ValidityVerticle extends AbstractVerticle {
 
 	private static final Logger logger = LoggerFactory.getLogger(MetricsVerticle.class.getName());
-	private String COLLECTION;
+	private static String COLLECTION;
 	private JsonObject query, isotime;
 	
 	private MongoClient mongo;
@@ -45,12 +45,12 @@ public class ValidityVerticle extends AbstractVerticle {
 
 		vertx.eventBus().consumer("update-limit-on-ip", message -> {
 			logger.info("Got the event : " + message.body().toString());
-			ipRateLimit(message);
+			rateLimit(message);
 		});
 
 		vertx.eventBus().consumer("get-limit-on-ip", message -> {
 			logger.info("Got the event : " + message.body().toString());
-			getipRateLimit(message);
+			getRateLimit(message);
 		});
 
 		
@@ -105,26 +105,30 @@ public class ValidityVerticle extends AbstractVerticle {
 
 	}
 
-	private void getipRateLimit(Message<Object> message) {
+	private void getRateLimit(Message<Object> message) {
 		JsonObject request = new JsonObject(message.body().toString());
 		JsonObject query = decoderequest(request);
-		
-		if (request.containsKey("ip")) {
+
+		if(request.containsKey("emailID")) {
+			COLLECTION = "emailID_based_rate_limit";
+		} else {
 			COLLECTION = "ip_based_rate_limit";
-		} 
+		}
 		
 		mongoCount(COLLECTION, query, message);
 
 	}
 
-	private void ipRateLimit(Message<Object> message) {
+	private void rateLimit(Message<Object> message) {
 
 		JsonObject request = new JsonObject(message.body().toString());
 
-		if (request.containsKey("ip")) {
+		if(request.containsKey("emailID")) {
+			COLLECTION = "emailID_based_rate_limit";
+		} else {
 			COLLECTION = "ip_based_rate_limit";
-		} 
-		
+		}
+
 		mongo.insert(COLLECTION, request, write_response -> {
 			if (write_response.succeeded()) 
 			{
@@ -136,9 +140,6 @@ public class ValidityVerticle extends AbstractVerticle {
 				message.fail(1, "database-insert error");
 			}
 		});
-
-		
-		
 	}
 
 	private JsonObject decoderequest(JsonObject requested_data) {
@@ -146,10 +147,14 @@ public class ValidityVerticle extends AbstractVerticle {
 		JsonObject query = new JsonObject();
 		int state;
 
-		if (requested_data.containsKey("ip")) {
+		if (requested_data.containsKey("ip") && ! requested_data.containsKey("emailID")) {
 			state = 1;
 			query = constructQuery(state, requested_data);
+		} else if (requested_data.containsKey("ip") && requested_data.containsKey("emailID")) {
+			state = 2;
+			query = constructQuery(state, requested_data);
 		}
+
 
 		return query;
 
@@ -163,42 +168,44 @@ public class ValidityVerticle extends AbstractVerticle {
 
 		case 1:
 			query.put("ip", requested_data.getString("ip"));
-			
-			now = new GregorianCalendar();
-			now.set(Calendar.HOUR, 0);
-	        now.set(Calendar.MINUTE, 0);
-	        now.set(Calendar.SECOND, 0);
-	        now.set(Calendar.MILLISECOND, 0);
-
-			String todayAsISO = df.format(now.getTime()); // df.format(new Date());
-			logger.info("Todays Date Time : " + todayAsISO);
-			
-			Instant startInstant = Instant.parse(todayAsISO);
-
-			JsonObject startDateTime = new JsonObject();
-			startDateTime.put("$date", startInstant);
-
-			String nowAsISO = requested_data.getJsonObject("time").getString("$date");
-			logger.info("Current Date Time : " + nowAsISO);
-						
-			Instant endInstant = Instant.parse(nowAsISO.trim());
-
-			JsonObject endDateTime = new JsonObject();
-			endDateTime.put("$date", endInstant);
-			
-			isotime = new JsonObject();
-			
-			isotime.put("$gte", startDateTime);
-			isotime.put("$lte", endDateTime);
-			
-			query.put("time", isotime);
-			
-			logger.info(query);
-			
 			break;
-		}
 
+		case 2:
+			query.put("emailID", requested_data.getString("emailID"));
+			break;
+
+		}
 		
+		now = new GregorianCalendar();
+		now.set(Calendar.HOUR, 0);
+        now.set(Calendar.MINUTE, 0);
+        now.set(Calendar.SECOND, 0);
+        now.set(Calendar.MILLISECOND, 0);
+
+		String todayAsISO = df.format(now.getTime()); // df.format(new Date());
+		logger.info("Todays Date Time : " + todayAsISO);
+		
+		Instant startInstant = Instant.parse(todayAsISO);
+
+		JsonObject startDateTime = new JsonObject();
+		startDateTime.put("$date", startInstant);
+
+		String nowAsISO = requested_data.getJsonObject("time").getString("$date");
+		logger.info("Current Date Time : " + nowAsISO);
+					
+		Instant endInstant = Instant.parse(nowAsISO.trim());
+
+		JsonObject endDateTime = new JsonObject();
+		endDateTime.put("$date", endInstant);
+		
+		isotime = new JsonObject();
+		
+		isotime.put("$gte", startDateTime);
+		isotime.put("$lte", endDateTime);
+		
+		query.put("time", isotime);
+		
+		logger.info(query);
 		
 		return query;
 	}

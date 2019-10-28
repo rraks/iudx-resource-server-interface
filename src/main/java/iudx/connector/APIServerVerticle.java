@@ -58,7 +58,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private DateFormat df; 
 	private Calendar now;
 	
-	private boolean status;
+	private boolean certificateStatus;
 	private Principal cn;
 
 	private String certificateClass[];
@@ -157,9 +157,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void search(RoutingContext routingContext) {
-		
-		
-		
+			
 		if(decodeCertificate(routingContext))
 		{
 			totalRequestsPerDay = 500;
@@ -192,6 +190,10 @@ public class APIServerVerticle extends AbstractVerticle {
 				metrics.put("endpoint", api);
 				
 				metrics.put("ip", ip);
+				
+				if(certificateStatus) {
+					metrics.put("emailID", emailID);
+				}
 				
 				switch (decoderequest(requested_data)) {
 
@@ -466,6 +468,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		metrics.put("endpoint", api);
 		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
 
+		if(certificateStatus) {
+			metrics.put("emailID", emailID);
+		}
+		
 		if (state != 5 || state != 6) 
 		{
 			metrics.put("resource-id", requested_data.getString("resource-id"));
@@ -741,19 +747,32 @@ public class APIServerVerticle extends AbstractVerticle {
 		// TODO Auto-generated method stub
 
 		Future<Void> validation = Future.future();
-
 		ip = routingContext.request().remoteAddress().host();
 
-		if (validity.containsKey(ip)) {
-			count = validity.get(ip);
+		if (certificateStatus) {
+			if (validity.containsKey(emailID)) {
+				count = validity.get(emailID);
+			} else {
+				count = 0;
+			}
 		} else {
-			count = 0;
+			if (validity.containsKey(ip)) {
+				count = validity.get(ip);
+			} else {
+				count = 0;
+			}
 		}
 
 		if (count <= totalRequestsPerDay) {
 			validation.complete();
 			count = count + 1;
-			validity.put(ip, count);
+			
+			if(certificateStatus) {
+				validity.put(emailID, count);				
+			} else {
+				validity.put(ip, count);				
+			}
+
 			logger.info("User from IP " + ip + " Accessed APIs for " + count + " times.");
 			logger.info("Allowed requests per day is : " +totalRequestsPerDay);
 		} else {
@@ -780,8 +799,12 @@ public class APIServerVerticle extends AbstractVerticle {
 
 						JsonObject response = (JsonObject) limit_count_replyHandler.result().body();
 						count = response.getInteger("count");
-						validity.put(ip, count);
-
+						
+						if(certificateStatus) {
+							validity.put(emailID, count);
+						} else {
+							validity.put(ip, count);
+						}
 					}
 				});
 			}
@@ -795,7 +818,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private boolean decodeCertificate(RoutingContext routingContext) {
 
-		status = false;
+		certificateStatus = false;
 		
 		try {
 			cn = routingContext.request().connection().sslSession().getPeerPrincipal();
@@ -808,15 +831,15 @@ public class APIServerVerticle extends AbstractVerticle {
 			oidClass = classLevel.split("=");
 			level = oidClass[1].split(":")[1];
 
-			status = true;
+			certificateStatus = true;
 
 			logger.info("e-mail : " + emailID + " : designation : " + designation + " : class level : " + level  );
 			
 		} catch (SSLPeerUnverifiedException e) {
-			status = false;
+			certificateStatus = false;
 		}
 
-		return status;
+		return certificateStatus;
 	}
 
 }
