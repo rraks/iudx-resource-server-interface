@@ -272,7 +272,23 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void count(RoutingContext routingContext) {
+
+		if(decodeCertificate(routingContext))
+		{
+			totalRequestsPerDay = 500;
+		}
+		else 
+		{
+			totalRequestsPerDay = 50; 
+		}
+		
+		Future<Void> validity = validateRequest(routingContext, "count");
+		validity.setHandler(validationResultHandler -> {
+			
 		HttpServerResponse response = routingContext.response();
+			
+		if(validationResultHandler.succeeded()) 
+		{
 
 		JsonObject requested_data = new JsonObject();
 		DeliveryOptions options = new DeliveryOptions();
@@ -287,6 +303,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		
 		metrics.put("time", new JsonObject().put("$date", nowAsISO));
 		metrics.put("endpoint", api);
+		metrics.put("ip", ip);
 		
 		switch (decoderequest(requested_data)) {
 
@@ -324,12 +341,41 @@ public class APIServerVerticle extends AbstractVerticle {
 			options.addHeader("options","count");
 			publishEvent(event,requested_data,options, response);
 			break;
-		}
+			
+		default:
+			logger.info("case-unknown: invalid api request");
+			handle400(response);
+			}
+			}
+		
+			else 
+			{
+				handle429(response);
+			}
+			
+		});
 	}
 	
 	private void metrics(RoutingContext routingContext) {
 
+		if(decodeCertificate(routingContext))
+		{
+			totalRequestsPerDay = 500;
+		}
+		else 
+		{
+			totalRequestsPerDay = 50; 
+		}
+		
+		Future<Void> validity = validateRequest(routingContext, "metrics");
+		
+		validity.setHandler(validationResultHandler -> {
+			
 		HttpServerResponse response = routingContext.response();
+			
+		if(validationResultHandler.succeeded()) 
+		{
+
 		final JsonObject requested_data = routingContext.getBodyAsJson();
 
 		DeliveryOptions options = new DeliveryOptions();
@@ -344,8 +390,18 @@ public class APIServerVerticle extends AbstractVerticle {
 		String nowAsISO = df.format(now.getTime()); 
 		
 		metrics.put("time", new JsonObject().put("$date", nowAsISO));
-
+		metrics.put("ip", ip);
+		
 		publishEvent(event, requested_data, options, response);
+		
+		}
+		
+		else 
+		{
+			handle429(response);
+		}
+		
+	});
 		
 	}
 	
@@ -460,6 +516,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 	private void handle429(HttpServerResponse response) {
 		response.setStatusCode(429).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+	}
+
+	private void handle400(HttpServerResponse response) {
+		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+		updatevalidity(metrics);
 	}
 	
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
