@@ -198,6 +198,8 @@ public class APIServerVerticle extends AbstractVerticle {
 				switch (decoderequest(requested_data)) {
 
 				case 0:
+					logger.info("case-unknown: invalid api request");
+					handle400(response);
 					break;
 
 				case 1:
@@ -345,6 +347,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		default:
 			logger.info("case-unknown: invalid api request");
 			handle400(response);
+			break;
 			}
 			}
 		

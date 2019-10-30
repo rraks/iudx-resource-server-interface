@@ -286,7 +286,7 @@ public class SearchVerticle extends AbstractVerticle {
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
 
 		query = new JsonObject();
-		query.put("location", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
+		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
 				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
 
 		return query;
@@ -462,7 +462,7 @@ public class SearchVerticle extends AbstractVerticle {
 	switch(relation){
 
 		case "equals": query = new JsonObject()
-						.put("geoJsonLocation.coordinates",coordinates );
+						.put("__geoJsonLocation.coordinates",coordinates );
 				break;
 
 		case "disjoint": break;
@@ -521,7 +521,7 @@ public class SearchVerticle extends AbstractVerticle {
 
 	JsonObject query = new JsonObject();
 
-	query.put("geoJsonLocation", new JsonObject()
+	query.put("__geoJsonLocation", new JsonObject()
 				.put("$geoIntersects", new JsonObject()
 					.put("$geometry",new JsonObject()
 						.put("type",geometry)
@@ -537,7 +537,7 @@ public class SearchVerticle extends AbstractVerticle {
   private JsonObject searchGeoWithin(String geometry, JsonArray coordinates){
 
     JsonObject query = new JsonObject();
-    query.put("geoJsonLocation", new JsonObject()
+    query.put("__geoJsonLocation", new JsonObject()
             .put("$geoWithin", new JsonObject()
                 .put("$geometry",new JsonObject()
                     .put("type",geometry)
