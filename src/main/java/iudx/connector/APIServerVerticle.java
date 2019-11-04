@@ -160,11 +160,11 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 		if(decodeCertificate(routingContext))
 		{
-			totalRequestsPerDay = 500;
+			totalRequestsPerDay = 10000;
 		}
 		else 
 		{
-			totalRequestsPerDay = 50; 
+			totalRequestsPerDay = 10000; 
 		}
 		
 		Future<Void> validity = validateRequest(routingContext, "search");
@@ -277,11 +277,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		if(decodeCertificate(routingContext))
 		{
-			totalRequestsPerDay = 500;
+			totalRequestsPerDay = 10000;
 		}
 		else 
 		{
-			totalRequestsPerDay = 50; 
+			totalRequestsPerDay = 10000; 
 		}
 		
 		Future<Void> validity = validateRequest(routingContext, "count");
