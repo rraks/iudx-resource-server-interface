@@ -175,7 +175,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			if(validationResultHandler.succeeded()) 
 			{
-				JsonObject requested_data = new JsonObject();
+				JsonObject requested_data;
 				DeliveryOptions options = new DeliveryOptions();
 				requested_data = routingContext.getBodyAsJson();
 				api = "search";
@@ -434,14 +434,14 @@ public class APIServerVerticle extends AbstractVerticle {
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
 				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
+				&& !requested_data.containsKey("geometry")) {
 			state = 3;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
 				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
+				&& !requested_data.containsKey("geometry")) {
 			state = 4;
 		}
 

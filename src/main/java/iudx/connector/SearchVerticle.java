@@ -215,7 +215,9 @@ public class SearchVerticle extends AbstractVerticle {
 		resource_id = request.getString("resource-id");
 		time = request.getString("time");
 		TRelation = request.getString("TRelation");
-
+		JsonObject attributeQuery = new JsonObject();
+		JsonObject timeQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
 		if (TRelation.contains("during")) {
 
 			timeStamp = time.split("/");
@@ -232,10 +234,10 @@ public class SearchVerticle extends AbstractVerticle {
 			endDateTime = new JsonObject();
 			endDateTime.put("$date", endInstant);
 			
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$gte", startDateTime);
 			isotime.put("$lte", endDateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("before")) {
@@ -245,9 +247,9 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$lte", dateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("after")) {
@@ -257,9 +259,9 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 			
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$gte", dateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("TEquals")) {
@@ -269,11 +271,19 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 
-			query.put("__resource-id", resource_id);
+			//query.put("__resource-id", resource_id);
 			isotime.put("$eq", dateTime);
 			query.put("__time", isotime);
 
 		}
+		if(request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			attributeQuery = constructAttributeQuery(request);
+			expressions.add(timeQuery).add(attributeQuery);
+			query.put("$and",expressions);
+			logger.info("TIME QUERY + ATTRIBUTE QUERY");
+		}else
+			query = timeQuery;
+
 		System.out.println(query);
 		
 		return query;
@@ -431,9 +441,17 @@ public class SearchVerticle extends AbstractVerticle {
 					String[] attr_arr = attribute_value.split(",");
 					query.put("$expr",new JsonObject()
 										.put("$and",new JsonArray().add(new JsonObject()
-													.put("$gt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[0]))))
+													.put("$gt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+																													.put("to","double")
+																													.put("onError","No numeric value available (NA/Unavailable)")
+																													.put("onNull","No value available")))
+																				.add(getDoubleFromS(attr_arr[0]))))
 													.add(new JsonObject()
-															.put("$lt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[1]))))));
+															.put("$lt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+																													.put("to","double")
+																													.put("onError","No numeric value available (NA/Unavailable)")
+																													.put("onNull","No value available")))
+																					.add(getDoubleFromS(attr_arr[1]))))));
 
 					break;
 
@@ -508,10 +526,14 @@ public class SearchVerticle extends AbstractVerticle {
   	query.put("$expr", new JsonObject()
 						.put(comparisonOp,new JsonArray()
 									.add(new JsonObject()
-											.put("$toDouble","$"+attrName))
+											.put("$convert", new JsonObject().put("input","$"+attrName)
+																.put("to","double")
+																.put("onError","No numeric value available (NA/Unavailable)")
+																.put("onNull","No value available")))
 									.add(attrValue)));
   	return query;
   }
+
 
   /**
    * Performs Mongo-GeoIntersects operation
@@ -690,11 +712,15 @@ public class SearchVerticle extends AbstractVerticle {
 		case 11:
 			api="search";
 			attributeFilter.put("_id", 0);
-			sortFilter = new JsonObject();
-			sortFilter.put("__time", -1);
+			JsonObject obj = (JsonObject) message.body();
+			String requestOptions = obj.containsKey("options")?obj.getString("options"):null;
 			findOptions = new FindOptions();
+			if(requestOptions!=null){
+				JsonObject sortFil = new JsonObject().put("__time",-1);
+				findOptions.setSort(sortFil);
+				findOptions.setLimit(1);
+			}
 			findOptions.setFields(attributeFilter);
-			findOptions.setSort(sortFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -750,6 +776,7 @@ public class SearchVerticle extends AbstractVerticle {
 								j.remove(hidden);
 							}
 						}
+
 						response.add(j);
 					}
 				}
@@ -760,6 +787,7 @@ public class SearchVerticle extends AbstractVerticle {
 				message.reply(response);
 
 			} else {
+				logger.info("Database query has FAILED!!!");
 				message.fail(1, "item-not-found");
 			}
 		});
