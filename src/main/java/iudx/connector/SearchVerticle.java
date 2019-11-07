@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 
@@ -223,18 +225,35 @@ public class SearchVerticle extends AbstractVerticle {
 			timeStamp = time.split("/");
 			startTime = timeStamp[0];
 			endTime = timeStamp[1];
-
-			startInstant = Instant.parse(startTime);
-
+			
+			if(startTime.contains("Z")) 
+			{
+				startInstant = Instant.parse(startTime);
+			}
+			
+			else 
+			{
+				OffsetDateTime start = OffsetDateTime.parse( startTime );
+				startInstant = start.toInstant();
+			}
+			
 			startDateTime = new JsonObject();
 			startDateTime.put("$date", startInstant);
 			
-			endInstant = Instant.parse(endTime);
-
+			if(endTime.contains("Z")) 
+			{
+				endInstant = Instant.parse(endTime);
+			}
+			
+			else 
+			{
+				OffsetDateTime end = OffsetDateTime.parse( endTime );
+				endInstant = end.toInstant();
+			}
+	
 			endDateTime = new JsonObject();
 			endDateTime.put("$date", endInstant);
 			
-			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$gte", startDateTime);
 			isotime.put("$lte", endDateTime);
 			timeQuery.put("__time", isotime);
@@ -242,19 +261,36 @@ public class SearchVerticle extends AbstractVerticle {
 
 		else if (TRelation.contains("before")) {
 
-			instant = Instant.parse(time);
+			if(time.contains("Z")) 
+			{
+				instant = Instant.parse(time);
+			}
+			
+			else 
+			{
+				OffsetDateTime start = OffsetDateTime.parse( time );
+				instant = start.toInstant();
+			}
 
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 
-			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$lte", dateTime);
 			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("after")) {
 			
-			instant = Instant.parse(time);
+			if(time.contains("Z")) 
+			{
+				instant = Instant.parse(time);
+			}
+			
+			else 
+			{
+				OffsetDateTime start = OffsetDateTime.parse( time );
+				instant = start.toInstant();
+			}
 
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
@@ -266,7 +302,16 @@ public class SearchVerticle extends AbstractVerticle {
 
 		else if (TRelation.contains("TEquals")) {
 
-			instant = Instant.parse(time);
+			if(time.contains("Z")) 
+			{
+				instant = Instant.parse(time);
+			}
+			
+			else 
+			{
+				OffsetDateTime start = OffsetDateTime.parse( time );
+				instant = start.toInstant();
+			}
 
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
