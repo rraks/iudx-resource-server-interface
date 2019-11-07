@@ -173,11 +173,17 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			HttpServerResponse response = routingContext.response();
 			
+			String token = routingContext.request().getHeader("token");
+			
 			if(validationResultHandler.succeeded()) 
 			{
 				JsonObject requested_data;
 				DeliveryOptions options = new DeliveryOptions();
 				requested_data = routingContext.getBodyAsJson();
+				if(token != null)
+				{
+				requested_data.put("token", token);
+				}
 				api = "search";
 				event = "search";
 				metrics = new JsonObject();

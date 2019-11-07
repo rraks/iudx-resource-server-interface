@@ -779,7 +779,7 @@ public class SearchVerticle extends AbstractVerticle {
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
 		String[] hiddenFields = { "__resource-id", "__time", "__geoJsonLocation", "_id", "__resource-group" };
-
+		JsonObject requested_body = new JsonObject(message.body().toString());
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
 			if (database_response.succeeded()) {
 				JsonArray response = new JsonArray();
@@ -813,6 +813,19 @@ public class SearchVerticle extends AbstractVerticle {
 						response.add(status);
 
 					}
+					
+					else if(requested_body.containsKey("token")) {
+
+
+						for (String hidden : hiddenFields) {
+							if (j.containsKey(hidden)) {
+								j.remove(hidden);
+							}
+						}
+
+						response.add(j);
+						
+					}
 
 					else {
 
@@ -822,6 +835,11 @@ public class SearchVerticle extends AbstractVerticle {
 							}
 						}
 
+						if(j.containsKey("Images"))
+						{
+						   j.remove("Images");
+						}
+						
 						response.add(j);
 					}
 				}
