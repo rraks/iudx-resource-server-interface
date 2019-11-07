@@ -822,6 +822,17 @@ public class SearchVerticle extends AbstractVerticle {
 								j.remove(hidden);
 							}
 						}
+						if(j.containsKey("Images"))
+						{
+							String images = j.getString("Images");
+							String[] image_array = images.split(";");
+							JsonArray json_image_array = new JsonArray();
+							for (int i = 0; i < image_array.length; i++) {
+								json_image_array.add(image_array[i]);
+							}
+							j.remove("Images");
+							j.put("Images", json_image_array);
+						}
 
 						response.add(j);
 						
