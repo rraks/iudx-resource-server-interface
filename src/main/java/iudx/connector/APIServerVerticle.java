@@ -68,9 +68,13 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String designation;
 	private String[] oidClass;
 	private String level;
-	
+	private String[] splitId;
+	private String resource_group;
+	private String resource_id;
 	private static int totalRequestsPerDay; 
-
+	private static String hiddenitem;
+	private static String[] hiddenitems;
+	private boolean ishidden = false;
 	@Override
 	public void start() {
 
@@ -122,6 +126,9 @@ public class APIServerVerticle extends AbstractVerticle {
 
 			truststore = prop.getProperty("truststore");
 			truststorePassword = prop.getProperty("truststorePassword");
+			
+			hiddenitem = prop.getProperty("hiddenitems");
+			hiddenitems = hiddenitem.split(";");
  	        	        
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
@@ -162,19 +169,19 @@ public class APIServerVerticle extends AbstractVerticle {
 		JsonObject requested_data;
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
-	
-		// Handling Hidden Items
-		if (requested_data.getString("id").equalsIgnoreCase(
-				"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Shivaji_Nagar_Railway_Station_34")
-				|| requested_data.getString("id").equalsIgnoreCase(
-						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Nalstop_Square_7")
-				|| requested_data.getString("id").equalsIgnoreCase(
-						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Swargate ST Stand_13")) 
-		{
-			handle404(response);
-		}
 		
-		else 
+		for (String item: hiddenitems)
+		{
+			ishidden = false;
+			if (requested_data.getString("id").equalsIgnoreCase(item))
+			{
+				ishidden = true;
+				handle404(response);
+				break;
+			}
+		}
+
+		if(! ishidden)
 		{
 		
 		if(decodeCertificate(routingContext))
@@ -299,18 +306,18 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
 		
-		// Handling Hidden Items
-		if (requested_data.getString("id").equalsIgnoreCase(
-				"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Shivaji_Nagar_Railway_Station_34")
-				|| requested_data.getString("id").equalsIgnoreCase(
-						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Nalstop_Square_7")
-				|| requested_data.getString("id").equalsIgnoreCase(
-						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Swargate ST Stand_13")) 
+		for (String item: hiddenitems)
 		{
-			handle404(response);
+			ishidden = false;
+			if (requested_data.getString("id").equalsIgnoreCase(item))
+			{
+				ishidden = true;
+				handle404(response);
+				break;
+			}
 		}
-		
-		else 
+
+		if(! ishidden)
 		{
 
 		if(decodeCertificate(routingContext))
@@ -442,11 +449,11 @@ public class APIServerVerticle extends AbstractVerticle {
 		
 	}
 	
-	private int decoderequest(JsonObject requested_data) {
+	private int decoderequest(JsonObject requested_data) { 
 
-		String[] splitId = requested_data.getString("id").split("/");
-		String resource_group = splitId[3];
-		String resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
+		splitId = requested_data.getString("id").split("/");
+		resource_group = splitId[3];
+		resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
 		requested_data.put("resource-group-id", resource_group);
 		requested_data.put("resource-id", resource_id);
 		requested_data.remove("id");
