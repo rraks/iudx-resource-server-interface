@@ -157,7 +157,26 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 
 	private void search(RoutingContext routingContext) {
-			
+
+		HttpServerResponse response = routingContext.response();
+		JsonObject requested_data;
+		DeliveryOptions options = new DeliveryOptions();
+		requested_data = routingContext.getBodyAsJson();
+	
+		// Handling Hidden Items
+		if (requested_data.getString("id").equalsIgnoreCase(
+				"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Shivaji_Nagar_Railway_Station_34")
+				|| requested_data.getString("id").equalsIgnoreCase(
+						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Nalstop_Square_7")
+				|| requested_data.getString("id").equalsIgnoreCase(
+						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Swargate ST Stand_13")) 
+		{
+			handle404(response);
+		}
+		
+		else 
+		{
+		
 		if(decodeCertificate(routingContext))
 		{
 			totalRequestsPerDay = 10000;
@@ -171,15 +190,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		
 		validity.setHandler(validationResultHandler -> {
 			
-			HttpServerResponse response = routingContext.response();
-			
 			String token = routingContext.request().getHeader("token");
 			
 			if(validationResultHandler.succeeded()) 
 			{
-				JsonObject requested_data;
-				DeliveryOptions options = new DeliveryOptions();
-				requested_data = routingContext.getBodyAsJson();
 				if(token != null)
 				{
 				requested_data.put("token", token);
@@ -270,16 +284,34 @@ public class APIServerVerticle extends AbstractVerticle {
 				}
 			
 			}
-			
+
 			else 
 			{
 				handle429(response);
 			}
-			
 		});
 	}
-
+	}
 	private void count(RoutingContext routingContext) {
+
+		HttpServerResponse response = routingContext.response();
+		JsonObject requested_data;
+		DeliveryOptions options = new DeliveryOptions();
+		requested_data = routingContext.getBodyAsJson();
+		
+		// Handling Hidden Items
+		if (requested_data.getString("id").equalsIgnoreCase(
+				"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Shivaji_Nagar_Railway_Station_34")
+				|| requested_data.getString("id").equalsIgnoreCase(
+						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Nalstop_Square_7")
+				|| requested_data.getString("id").equalsIgnoreCase(
+						"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/aqm-bosch-climo/Swargate ST Stand_13")) 
+		{
+			handle404(response);
+		}
+		
+		else 
+		{
 
 		if(decodeCertificate(routingContext))
 		{
@@ -293,14 +325,9 @@ public class APIServerVerticle extends AbstractVerticle {
 		Future<Void> validity = validateRequest(routingContext, "count");
 		validity.setHandler(validationResultHandler -> {
 			
-		HttpServerResponse response = routingContext.response();
-			
 		if(validationResultHandler.succeeded()) 
 		{
 
-		JsonObject requested_data = new JsonObject();
-		DeliveryOptions options = new DeliveryOptions();
-		requested_data = routingContext.getBodyAsJson();
 		api = "count";
 		event = "search"; 
 		
@@ -363,6 +390,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 			
 		});
+	}
 	}
 	
 	private void metrics(RoutingContext routingContext) {
@@ -530,6 +558,10 @@ public class APIServerVerticle extends AbstractVerticle {
 	private void handle400(HttpServerResponse response) {
 		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
 		updatevalidity(metrics);
+	}
+	
+	private void handle404(HttpServerResponse response) {
+		response.setStatusCode(404).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
 	}
 	
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
