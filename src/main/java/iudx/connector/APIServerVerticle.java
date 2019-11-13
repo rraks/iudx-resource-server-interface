@@ -72,9 +72,10 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String resource_group;
 	private String resource_id;
 	private static int totalRequestsPerDay; 
-	private static String hiddenitem;
-	private static String[] hiddenitems;
+	private static String hiddenitem, allowedresourcegroup;
+	private static String[] hiddenitems, allowedresourcegroups;
 	private boolean ishidden = false;
+	private boolean isallowed = false;
 	@Override
 	public void start() {
 
@@ -129,6 +130,9 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			hiddenitem = prop.getProperty("hiddenitems");
 			hiddenitems = hiddenitem.split(";");
+			
+			allowedresourcegroup = prop.getProperty("allowedresourcegroups");
+			allowedresourcegroups = allowedresourcegroup.split(";");
  	        	        
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
@@ -459,7 +463,21 @@ public class APIServerVerticle extends AbstractVerticle {
 		requested_data.remove("id");
 		
 		state = 0;
-		if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+
+		isallowed = false;
+		for (String resourcegroup: allowedresourcegroups)
+		{
+			if (resource_group.equalsIgnoreCase(resourcegroup))
+			{
+				isallowed = true;
+			}
+		}
+
+		if(! isallowed) {
+			state = 0;
+		}
+		
+		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 1;
@@ -539,7 +557,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	}
 	
 	private void publishEvent(String event, JsonObject requested_data, DeliveryOptions options, HttpServerResponse response) {
-		vertx.eventBus().send(event, requested_data, options, replyHandler -> {
+		
+		vertx.eventBus().request(event, requested_data, options, replyHandler -> {
 			if (replyHandler.succeeded()) 
 			{
 				handle200(response, replyHandler, requested_data);
