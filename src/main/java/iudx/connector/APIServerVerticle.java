@@ -22,6 +22,7 @@ import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.file.FileSystem;
 import io.vertx.core.http.ClientAuth;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
@@ -76,6 +77,9 @@ public class APIServerVerticle extends AbstractVerticle {
 	private static String[] hiddenitems, allowedresourcegroups;
 	private boolean ishidden = false;
 	private boolean isallowed = false;
+	private String id;
+	HashSet<String> items = new HashSet<String>();
+	
 	@Override
 	public void start() {
 
@@ -133,6 +137,23 @@ public class APIServerVerticle extends AbstractVerticle {
 			
 			allowedresourcegroup = prop.getProperty("allowedresourcegroups");
 			allowedresourcegroups = allowedresourcegroup.split(";");
+
+		    FileSystem vertxFileSystem = vertx.fileSystem();
+		    vertxFileSystem.readFile("items.json", readFile -> {
+		        if (readFile.succeeded()) {
+		        	System.out.println("Read the file");
+		        	JsonArray itemsArray = readFile.result().toJsonArray();
+
+		        	for(int i=0;i<itemsArray.size();i++) {
+		        		JsonObject jo = itemsArray.getJsonObject(i);
+		            	String __id = (String) jo.getString("id");
+		            	items.add(__id);
+		            }
+		            
+		            logger.info("Updated items list. Totally loaded " + items.size() + " items");
+		        	
+		        	}
+		        });
  	        	        
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
@@ -145,7 +166,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	            }
 	        }
 	    }
-		
+	    		
 		clientAuth = ClientAuth.REQUEST;
 
 		server =
@@ -455,6 +476,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private int decoderequest(JsonObject requested_data) { 
 
+		id = requested_data.getString("id");
 		splitId = requested_data.getString("id").split("/");
 		resource_group = splitId[3];
 		resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
@@ -464,19 +486,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		
 		state = 0;
 
-		isallowed = false;
-		for (String resourcegroup: allowedresourcegroups)
-		{
-			if (resource_group.equalsIgnoreCase(resourcegroup))
-			{
-				isallowed = true;
-			}
-		}
-
-		if(! isallowed) {
+		if(! items.contains(id)) {
 			state = 0;
 		}
-		
+
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
