@@ -74,7 +74,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String resource_id;
 	private static int totalRequestsPerDay; 
 	private static String hiddenitem, allowedresourcegroup;
-	private static String[] hiddenitems, allowedresourcegroups;
+	private static String[] hiddenitems, allowedresourcegroups, resource_groups, allowed_number_of_days;
 	private boolean ishidden = false;
 	private boolean isallowed = false;
 	private String id;
@@ -507,7 +507,7 @@ public class APIServerVerticle extends AbstractVerticle {
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
 				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry")) {
-			state = 3;
+				state = 3;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
@@ -574,8 +574,12 @@ public class APIServerVerticle extends AbstractVerticle {
 		vertx.eventBus().request(event, requested_data, options, replyHandler -> {
 			if (replyHandler.succeeded()) 
 			{
-				handle200(response, replyHandler, requested_data);
-
+				String reply = replyHandler.result().body().toString();
+				if (reply.contains("allowed_number_of_days")) {
+					handle416(response, reply);
+				} else {
+					handle200(response, reply, requested_data);
+				}
 			} else 
 			{
 				response.setStatusCode(400).end();
@@ -583,9 +587,9 @@ public class APIServerVerticle extends AbstractVerticle {
 		});
 	}
 
-	private void handle200(HttpServerResponse response, AsyncResult<Message<Object>> replyHandler, JsonObject requested_data) {
+	private void handle200(HttpServerResponse response, String reply, JsonObject requested_data) {
 		response.setStatusCode(200).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json")
-				.end(replyHandler.result().body().toString());
+				.end(reply);
 		updatemetrics(requested_data, metrics);
 		updatevalidity(metrics);
 	}
@@ -596,6 +600,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 	private void handle400(HttpServerResponse response) {
 		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+		updatevalidity(metrics);
+	}
+	
+	private void handle416(HttpServerResponse response, String reply) {
+		response.setStatusCode(416).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end(reply);
 		updatevalidity(metrics);
 	}
 	

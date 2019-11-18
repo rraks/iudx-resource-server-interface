@@ -73,7 +73,7 @@ public class Connector extends AbstractVerticle {
 		   final Future<Void> future = Future.future();
 		   int procs = Runtime.getRuntime().availableProcessors();
 		   
-		   if("iudx.connector.APIServerVerticle".equals(name))
+		   if("iudx.connector.APIServerVerticle".equals(name) || "iudx.connector.SearchVerticle".equals(name))
 		   {
 			   vertx.deployVerticle(name, new DeploymentOptions()
 					   					  .setWorker(true)
