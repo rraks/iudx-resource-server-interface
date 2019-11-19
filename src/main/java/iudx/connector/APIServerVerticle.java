@@ -499,70 +499,79 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& !requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name") && !requested_data.containsKey("lon")
+				&& !requested_data.containsKey("bbox")) {
 			state = 2;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
 				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry")) {
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("lon")
+				&& !requested_data.containsKey("bbox")) {
 				state = 3;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
 				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry")) {
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("lon")
+				&& !requested_data.containsKey("bbox")) {
 			state = 4;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
-				&& !requested_data.containsKey("geometry")) {
+				&& requested_data.containsKey("radius") 
+				&& !requested_data.containsKey("geometry")
+				&& !requested_data.containsKey("bbox")) {
 			state = 5;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
-				&& !requested_data.containsKey("geometry")) {
+				&& requested_data.containsKey("radius")
+				&& !requested_data.containsKey("geometry")
+				&& !requested_data.containsKey("bbox")) {
 			state = 6;
 		}
 		
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("lon")
 				&& !requested_data.containsKey("geometry")) {
 			state = 7;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("lat") && !requested_data.containsKey("lon")
+				&& !requested_data.containsKey("bbox")) {
 			state = 8;
 		}
 		
         else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry")) {
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("lon")) {
 			state = 9;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("lon") && !requested_data.containsKey("bbox")) {
 			state = 10;
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
 				&& requested_data.containsKey("resource-group-id") && (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
-				&& !requested_data.containsKey("time")  && !requested_data.containsKey("lat") && !requested_data.containsKey("geometry")){
+				&& !requested_data.containsKey("time") && !requested_data.containsKey("TRelation") && !requested_data.containsKey("lat") && !requested_data.containsKey("geometry")
+				&& !requested_data.containsKey("bbox")){
 			state=11;
 		}
 
 		else if (api.equalsIgnoreCase("count") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
 				&& (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
-				&& requested_data.containsKey("resource-group-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
-				&& !requested_data.containsKey("geometry")){
+				&& requested_data.containsKey("resource-group-id") && !requested_data.containsKey("time") && !requested_data.containsKey("TRelation")
+				&& !requested_data.containsKey("lat") && !requested_data.containsKey("geometry") && !requested_data.containsKey("bbox")){
 			state=12;
 		}
 		System.out.println("STATE: "+ state);

@@ -53,8 +53,8 @@ public class SearchVerticle extends AbstractVerticle {
 	private String 		auth_database;
 	private String 		connectionStr;
 	private static final String COLLECTION = "archive";
-	private JsonObject resourceQuery,finalQuery;
-
+	private JsonObject resourceQuery, attributeQuery, temporalQuery, finalGeoQuery, finalQuery;
+	private boolean geo_attribute_query = false;
     
     private String geometry="", relation="", coordinatesS="";
     private String[] coordinatesArr;
@@ -163,6 +163,7 @@ public class SearchVerticle extends AbstractVerticle {
 		resource_id = request.getString("resource-id");
 		resourceQuery.put("__resource-id",resource_id);
 		resourceQuery.put("__resource-group",resource_group_id);
+		geo_attribute_query = false;
 		
 		if(resource_group_id.equalsIgnoreCase("pune-itms")) {
 			allowed_number_of_days = 1;
@@ -391,7 +392,7 @@ public class SearchVerticle extends AbstractVerticle {
 			query.put("__time", isotime);
 		}
 
-		if(request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+		if(request.containsKey("attribute-name") && request.containsKey("attribute-value") && ! geo_attribute_query){
 			attributeQuery = constructAttributeQuery(request);
 			expressions.add(timeQuery).add(attributeQuery);
 			query.put("$and",expressions);
@@ -409,28 +410,64 @@ public class SearchVerticle extends AbstractVerticle {
 		double latitude = Double.parseDouble(request.getString("lat"));
 		double longitude = Double.parseDouble(request.getString("lon"));
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
+		boolean attribute = false, temporal = false;
 
 		query = new JsonObject();
+        attributeQuery = new JsonObject();
+        temporalQuery = new JsonObject();
+        finalGeoQuery = new JsonObject();
+        expressions = new JsonArray();
+        
 		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
 				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
 
         if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
-			JsonObject attributeQuery = constructAttributeQuery(request);
-			expressions.add(query).add(attributeQuery);
-			query.put("$and",expressions);
+			attributeQuery = constructAttributeQuery(request);
+			attribute = true;
 		}
-        
-		return query;
+
+		if (request.containsKey("time") && request.containsKey("TRelation")) {
+			geo_attribute_query = true;
+			temporalQuery = constructTimeSeriesQuery(request);
+			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else {
+				temporal = true;
+			}
+		}
+
+		if (attribute && temporal) {
+			expressions.add(query).add(attributeQuery).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (attribute) {
+			expressions.add(query).add(attributeQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (temporal) {
+			expressions.add(query).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else {
+			finalGeoQuery = query;
+		}
+
+		return finalGeoQuery;
 
 	}
 
     private JsonObject constructGeoBboxQuery(JsonObject request){
         geometry="bbox";
         JsonObject geoQuery = new JsonObject();
-		JsonArray expressions = new JsonArray();
+		expressions = new JsonArray();
+		query = new JsonObject();
 		coordinates = new JsonArray();
         relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
         boolean valid = validateRelation(geometry, relation);
+		boolean attribute = false, temporal = false;
+        attributeQuery = new JsonObject();
+        temporalQuery = new JsonObject();
+        finalGeoQuery = new JsonObject();
+
         if(valid){
             coordinatesS = request.getString("bbox");
             coordinatesArr = coordinatesS.split(",");
@@ -446,21 +483,51 @@ public class SearchVerticle extends AbstractVerticle {
         } else
             geoQuery=null;
 
+        query=geoQuery;
+        
         if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
-			JsonObject attributeQuery = constructAttributeQuery(request);
-			expressions.add(geoQuery).add(attributeQuery);
-			query.put("$and",expressions);
-		} else
-			query=geoQuery;
+			attributeQuery = constructAttributeQuery(request);
+			attribute = true;
+		}
+        
+		if (request.containsKey("time") && request.containsKey("TRelation")) {
+			geo_attribute_query = true;
+			temporalQuery = constructTimeSeriesQuery(request);
+			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else {
+				temporal = true;
+			}
+		}
 
-        return query;
+		if (attribute && temporal) {
+			expressions.add(query).add(attributeQuery).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (attribute) {
+			expressions.add(query).add(attributeQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (temporal) {
+			expressions.add(query).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else {
+			finalGeoQuery = query;
+		}
+        
+        return finalGeoQuery;
     }
 
     private JsonObject constructGeoPoly_LineQuery(JsonObject request){
 
 		JsonObject geoQuery = new JsonObject();
-		JsonArray expressions = new JsonArray();
+		expressions = new JsonArray();
 		coordinates = new JsonArray();
+		boolean attribute = false, temporal = false;
+        attributeQuery = new JsonObject();
+        temporalQuery = new JsonObject();
+        finalGeoQuery = new JsonObject();
+        
         //Polygon or LineString
         if(request.containsKey("geometry")){
             if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
@@ -505,14 +572,39 @@ public class SearchVerticle extends AbstractVerticle {
         }else 
             geoQuery=null;
 
+        query = geoQuery;
+        
 		if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
-			JsonObject attributeQuery = constructAttributeQuery(request);
-			expressions.add(geoQuery).add(attributeQuery);
-			query.put("$and",expressions);
-		} else
-			query=geoQuery;
+			attributeQuery = constructAttributeQuery(request);
+			attribute = true;
+		}
+        
+		if (request.containsKey("time") && request.containsKey("TRelation")) {
+			geo_attribute_query = true;
+			temporalQuery = constructTimeSeriesQuery(request);
+			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else {
+				temporal = true;
+			}
+		}
 
-        return query;
+		if (attribute && temporal) {
+			expressions.add(query).add(attributeQuery).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (attribute) {
+			expressions.add(query).add(attributeQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else if (temporal) {
+			expressions.add(query).add(temporalQuery);
+			finalGeoQuery.put("$and", expressions);
+		} else {
+			finalGeoQuery = query;
+		}
+        
+        return finalGeoQuery;
     }
 
 	private JsonObject constructAttributeQuery(JsonObject request){
