@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
@@ -18,10 +19,8 @@ import java.util.logging.Logger;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.DeliveryOptions;
-import io.vertx.core.eventbus.Message;
 import io.vertx.core.file.FileSystem;
 import io.vertx.core.http.ClientAuth;
 import io.vertx.core.http.HttpHeaders;
@@ -50,6 +49,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	int state;
 	JsonObject metrics;
 	ConcurrentHashMap<String,Integer> validity = new ConcurrentHashMap<String,Integer>();
+	ConcurrentHashMap<String, String> downloadLinks;
 	String ip;
 	int count;
 
@@ -79,6 +79,10 @@ public class APIServerVerticle extends AbstractVerticle {
 	private boolean isallowed = false;
 	private String id;
 	HashSet<String> items = new HashSet<String>();
+	private String resourceServerGroup;
+	private String[] group_name;
+	private String resource_group_id;
+	private String reply, time;
 	
 	@Override
 	public void start() {
@@ -109,7 +113,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		router.post(basepath + "/count").handler(this::count);
 		router.post(basepath + "/subscriptions").handler(this::subscriptionsRouter);
 		router.post(basepath + "/media").handler(this::search);
-		router.post(basepath + "/download").handler(this::search);
+		router.post(basepath + "/download").handler(this::download);
 		router.post(basepath + "/metrics").handler(this::metrics);
 
 		router.get(basepath + "/subscriptions/:subId").handler(this::subscriptionStatus);
@@ -154,7 +158,25 @@ public class APIServerVerticle extends AbstractVerticle {
 		        	
 		        	}
 		        });
- 	        	        
+
+		    vertxFileSystem.readFile("download.json", readFile -> {
+		        if (readFile.succeeded()) {
+		        	JsonObject j = readFile.result().toJsonObject();
+	        		Set<String> groups = j.fieldNames();
+	        		Iterator<String> groupIterator = groups.iterator();
+	        		
+	        		downloadLinks = new ConcurrentHashMap<String, String>();
+	        		
+	        		while(groupIterator.hasNext()) {
+	        			String group_name = groupIterator.next();
+	        			downloadLinks.put(group_name, j.getString(group_name));
+	        		}
+	        		
+		        	logger.info("Updated download link list.");
+		        	
+		        	}
+		        });
+		    
 	    } catch (IOException ex) {
 	        ex.printStackTrace();
 	    } finally {
@@ -473,6 +495,47 @@ public class APIServerVerticle extends AbstractVerticle {
 	});
 		
 	}
+
+	private void download(RoutingContext routingContext) {
+
+		if (decodeCertificate(routingContext)) {
+			totalRequestsPerDay = 500;
+		} else {
+			totalRequestsPerDay = 100;
+		}
+
+		Future<Void> validity = validateRequest(routingContext, "download");
+
+		validity.setHandler(validationResultHandler -> {
+
+			HttpServerResponse response = routingContext.response();
+
+			if (validationResultHandler.succeeded()) {
+
+				final JsonObject requested_data = routingContext.getBodyAsJson();
+				
+				DeliveryOptions options = new DeliveryOptions();
+
+				api = "download";
+
+				metrics = new JsonObject();
+
+				now = Calendar.getInstance();
+				String nowAsISO = df.format(now.getTime());
+
+				metrics.put("time", new JsonObject().put("$date", nowAsISO));
+				metrics.put("ip", ip);
+
+				downloadFile(requested_data, options, response);
+
+			}
+
+			else {
+				handle429(response);
+			}
+
+		});
+	}
 	
 	private int decoderequest(JsonObject requested_data) { 
 
@@ -490,7 +553,9 @@ public class APIServerVerticle extends AbstractVerticle {
 			state = 0;
 		}
 
-		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") 
+				&& (requested_data.getString("options").contains("latest") || requested_data.getString("options").contains("status")) 
+				&& requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 1;
@@ -506,7 +571,12 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& requested_data.containsKey("TRelation") 
+				&& (requested_data.getString("TRelation").equalsIgnoreCase("during") 
+				|| requested_data.getString("TRelation").equalsIgnoreCase("before") 
+				|| requested_data.getString("TRelation").equalsIgnoreCase("after")
+				|| requested_data.getString("TRelation").equalsIgnoreCase("TEquals"))
+				&& !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("lon")
 				&& !requested_data.containsKey("bbox")) {
 				state = 3;
@@ -514,7 +584,12 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& requested_data.containsKey("TRelation") 
+				&& (requested_data.getString("TRelation").equalsIgnoreCase("during") 
+				|| requested_data.getString("TRelation").equalsIgnoreCase("before") 
+				|| requested_data.getString("TRelation").equalsIgnoreCase("after")
+				|| requested_data.getString("TRelation").equalsIgnoreCase("TEquals"))
+				&& !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("lon")
 				&& !requested_data.containsKey("bbox")) {
 			state = 4;
@@ -586,6 +661,8 @@ public class APIServerVerticle extends AbstractVerticle {
 				String reply = replyHandler.result().body().toString();
 				if (reply.contains("allowed_number_of_days")) {
 					handle416(response, reply);
+				} else if (reply.contains("time")) {
+					handle400(response, reply);
 				} else {
 					handle200(response, reply, requested_data);
 				}
@@ -596,6 +673,58 @@ public class APIServerVerticle extends AbstractVerticle {
 		});
 	}
 
+	private void downloadFile(JsonObject requested_data, DeliveryOptions options, HttpServerResponse response) {
+
+		if (requested_data.containsKey("resourceServerGroup")) {
+			resourceServerGroup = requested_data.getString("resourceServerGroup");
+			group_name = resourceServerGroup.split(":");
+			resource_group_id = group_name[2];
+
+			if (downloadLinks.get(resource_group_id.split("/")[1].trim()) == null) {
+				handle400(response);
+			}
+
+			else if (requested_data.containsKey("options")) {
+				if (requested_data.getString("options").equalsIgnoreCase("all")) {
+					reply = getDownloadLinks(resource_group_id);
+					handle200(response, reply, requested_data);
+				}
+
+				else {
+					handle400(response);
+				}
+			}
+
+			else if (requested_data.containsKey("time") && requested_data.containsKey("TRelation")) {
+				time = requested_data.getString("time");
+				reply = getDownloadLinks(resource_group_id, time);
+				handle200(response, reply, requested_data);
+			}
+
+			else {
+				handle400(response);
+			}
+		}
+
+		else {
+			handle400(response);
+		}
+	}
+
+	private String getDownloadLinks(String resource_group_id) {
+
+		JsonObject reply = new JsonObject();
+		reply.put("resourceServerGroup", resourceServerGroup);
+		reply.put("download_URL", downloadLinks.get(resource_group_id.split("/")[1].trim()));
+		
+		return reply.toString();
+	}
+	
+	private String getDownloadLinks(String resource_group_id, String time) {
+		String reply = "Download links for " + resource_group_id + " for time "+ time;
+		return reply;
+	}
+	
 	private void handle200(HttpServerResponse response, String reply, JsonObject requested_data) {
 		response.setStatusCode(200).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json")
 				.end(reply);
@@ -609,6 +738,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 	private void handle400(HttpServerResponse response) {
 		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+		updatevalidity(metrics);
+	}
+	
+	private void handle400(HttpServerResponse response, String reply) {
+		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end(reply);
 		updatevalidity(metrics);
 	}
 	

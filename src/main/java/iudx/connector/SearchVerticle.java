@@ -132,6 +132,8 @@ public class SearchVerticle extends AbstractVerticle {
 
 		if(query.containsKey("allowed_number_of_days")) {
 			message.reply(query);
+		} else if(query.containsKey("time")) {
+			message.reply(query);
 		}
 		else {
 		JsonObject fields = new JsonObject();
@@ -222,7 +224,11 @@ public class SearchVerticle extends AbstractVerticle {
 			break;
 		}
 		
-		if(query.containsKey("allowed_number_of_days")) {
+		if(query.containsKey("time")) {
+			finalQuery = query;
+		}
+		
+		else if(query.containsKey("allowed_number_of_days")) {
 			finalQuery = query;
 		}
 		else {
@@ -275,6 +281,10 @@ public class SearchVerticle extends AbstractVerticle {
 		JsonObject timeQuery = new JsonObject();
 		JsonArray expressions = new JsonArray();
 		
+		boolean isvalid = checkTimeStampValidity(TRelation, time);
+		
+		if(isvalid) {
+			
 		if (TRelation.contains("during")) {
 
 			timeStamp = time.split("/");
@@ -402,8 +412,50 @@ public class SearchVerticle extends AbstractVerticle {
 
 		System.out.println(query);
 		
+		}
+		else {
+			timeQuery.put("time", "in-valid");
+			query = timeQuery;
+		}
 		return query;
 
+	}
+	
+	private boolean checkTimeStampValidity(String TRelation, String time) {		boolean isvalid = false;
+		
+		if( TRelation.equalsIgnoreCase("during") || TRelation.equalsIgnoreCase("before") || TRelation.equalsIgnoreCase("after") ) {
+			// continue
+			if(TRelation.equalsIgnoreCase("during")) {
+				if(! time.contains("/")) {
+					// Respond with 400
+					isvalid = false;
+				} else {
+					// check start and end time
+					isvalid = true;
+				}
+				
+			} else if(TRelation.equalsIgnoreCase("during")) {
+				if(time.contains("/")) {
+					// Respond with 400
+					isvalid = false;
+				} else {
+					// check time
+					isvalid = true;
+				}
+			} else if(TRelation.equalsIgnoreCase("during")) {
+				if(time.contains("/")) {
+					// Respond with 400
+					isvalid = false;
+				} else {
+					// check time
+					isvalid = true;
+				}
+			}
+		} else {
+			// Respond with 400
+			isvalid = false;
+		}
+		return isvalid;
 	}
 
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
