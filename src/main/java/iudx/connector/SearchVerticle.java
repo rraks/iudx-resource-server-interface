@@ -434,7 +434,7 @@ public class SearchVerticle extends AbstractVerticle {
 					isvalid = true;
 				}
 				
-			} else if(TRelation.equalsIgnoreCase("during")) {
+			} else if(TRelation.equalsIgnoreCase("before")) {
 				if(time.contains("/")) {
 					// Respond with 400
 					isvalid = false;
@@ -442,7 +442,7 @@ public class SearchVerticle extends AbstractVerticle {
 					// check time
 					isvalid = true;
 				}
-			} else if(TRelation.equalsIgnoreCase("during")) {
+			} else if(TRelation.equalsIgnoreCase("after")) {
 				if(time.contains("/")) {
 					// Respond with 400
 					isvalid = false;
@@ -482,6 +482,10 @@ public class SearchVerticle extends AbstractVerticle {
 			geo_attribute_query = true;
 			temporalQuery = constructTimeSeriesQuery(request);
 			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else if (temporalQuery.containsKey("time")) {
 				temporal = false;
 				finalGeoQuery = temporalQuery;
 				return finalGeoQuery;
@@ -546,6 +550,10 @@ public class SearchVerticle extends AbstractVerticle {
 			geo_attribute_query = true;
 			temporalQuery = constructTimeSeriesQuery(request);
 			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else if (temporalQuery.containsKey("time")) {
 				temporal = false;
 				finalGeoQuery = temporalQuery;
 				return finalGeoQuery;
@@ -635,6 +643,10 @@ public class SearchVerticle extends AbstractVerticle {
 			geo_attribute_query = true;
 			temporalQuery = constructTimeSeriesQuery(request);
 			if (temporalQuery.containsKey("allowed_number_of_days")) {
+				temporal = false;
+				finalGeoQuery = temporalQuery;
+				return finalGeoQuery;
+			} else if (temporalQuery.containsKey("time")) {
 				temporal = false;
 				finalGeoQuery = temporalQuery;
 				return finalGeoQuery;
@@ -881,6 +893,8 @@ public class SearchVerticle extends AbstractVerticle {
 		JsonObject sortFilter;
 		FindOptions findOptions;
 		String api;
+		JsonObject request_body = (JsonObject) message.body();
+		System.out.println(request_body);
 
 		switch (state) {
 
@@ -917,6 +931,14 @@ public class SearchVerticle extends AbstractVerticle {
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
 			findOptions.setSort(sortFilter);
+			if(request_body.containsKey("options")) {
+				if(request_body.getString("options").equalsIgnoreCase("latest")) {
+					findOptions.setLimit(1);
+				} else {
+					message.fail(1, "invalid-options");
+					break;
+				}
+			}
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -934,6 +956,14 @@ public class SearchVerticle extends AbstractVerticle {
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
 			findOptions.setSort(sortFilter);
+			if(request_body.containsKey("options")) {
+				if(request_body.getString("options").equalsIgnoreCase("latest")) {
+					findOptions.setLimit(1);
+				} else {
+					message.fail(1, "invalid-options");
+					break;
+				}
+			}
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -950,6 +980,14 @@ public class SearchVerticle extends AbstractVerticle {
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
 			findOptions.setSort(sortFilter);
+			if(request_body.containsKey("options")) {
+				if(request_body.getString("options").equalsIgnoreCase("latest")) {
+					findOptions.setLimit(1);
+				} else {
+					message.fail(1, "invalid-options");
+					break;
+				}
+			}
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -961,6 +999,14 @@ public class SearchVerticle extends AbstractVerticle {
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
 			findOptions.setSort(sortFilter);
+			if(request_body.containsKey("options")) {
+				if(request_body.getString("options").equalsIgnoreCase("latest")) {
+					findOptions.setLimit(1);
+				} else {
+					message.fail(1, "invalid-options");
+					break;
+				}
+			}
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
