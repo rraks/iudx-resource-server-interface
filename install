@@ -1,0 +1,23 @@
+#!bin/bash
+
+echo "Installing Resource API Server"
+
+cd docker
+
+echo "Stopping Containers"
+docker stop iudx-rs-interface 
+
+echo "Removing Containers"
+docker rm -f iudx-rs-interface 
+
+echo "Removing LOG session"
+tmux list-sessions | awk 'BEGIN{FS=":"}{print $1}' | xargs -n 1 tmux kill-session -t
+
+echo "Starting Containers"
+docker-compose -f docker-compose.yml up -d
+
+echo "Creating LOG session"
+tmux new -d -s iudx-rs-interface
+tmux send-keys -t iudx-rs-interface.0 "docker logs -f iudx-rs-interface" ENTER
+
+echo "Resource API Server is UP!"

@@ -1,0 +1,24 @@
+version: "3"
+
+networks:
+  iudx-net:
+    driver: bridge
+
+services:
+
+   resourceserver:
+    image: iudx/resource-server-api-interface
+    logging:
+     driver: "json-file"
+     options:
+         max-file: "5"
+         max-size: "100m"
+    container_name: iudx-rs-interface
+    hostname: iudx-rs-interface
+    restart: always
+    ports:
+      - "0.0.0.0:443:443"
+    networks:
+      - iudx-net
+    volumes:
+      - ../../iudx-resource-server-interface/:/iudx-resource-server-interface
