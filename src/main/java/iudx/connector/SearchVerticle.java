@@ -471,7 +471,7 @@ public class SearchVerticle extends AbstractVerticle {
         finalGeoQuery = new JsonObject();
         expressions = new JsonArray();
         
-		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
+		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$centerSphere",
 				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
 
         if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
