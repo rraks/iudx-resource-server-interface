@@ -20,6 +20,8 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+import io.vertx.core.MultiMap;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.file.FileSystem;
 import io.vertx.core.http.ClientAuth;
@@ -36,6 +38,7 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CorsHandler;
+import iudx.connector.ngsild.QueryMapper;
 
 public class APIServerVerticle extends AbstractVerticle {
 
@@ -44,6 +47,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private ClientAuth clientAuth ;
 	private final int port = 443;
 	private final String basepath = "/resource-server/pscdcl/v1";
+	private final String ngsildBasePath="/ngsi-ld/v1";
 	private String event, api;
 	private HashMap<String, String> upstream;
 	int state;
@@ -83,7 +87,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String[] group_name;
 	private String resource_group_id;
 	private String reply, time;
-	
+		
 	@Override
 	public void start() {
 
@@ -121,6 +125,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		router.delete(basepath + "/subscriptions/:subId").handler(this::deleteSubscription);
 
 		router.put(basepath + "/subscriptions/:subId").handler(this::updateSubscription);
+		
+		
+		router.get(ngsildBasePath+"/entities").handler(this::handleNGSILDEntityQuery);
+		router.get(ngsildBasePath+"/temporal/entities").handler(this::handleNGSILDEntityQuery);
 
 		Properties prop = new Properties();
 	    InputStream input = null;
@@ -209,7 +217,112 @@ public class APIServerVerticle extends AbstractVerticle {
 		df.setTimeZone(tz);
 		
 	}
+	
+	
+	private void handleNGSILDEntityQuery(RoutingContext routingContext) {
+		QueryMapper queryMapper=new QueryMapper();
+		HttpServerResponse response = routingContext.response();
+		MultiMap params=routingContext.queryParams();
+		DeliveryOptions options = new DeliveryOptions();
+		
+		JsonObject requested_data=queryMapper.getIUDXQuery(params);
 
+		for (String item: hiddenitems)
+		{
+			ishidden = false;
+			if (requested_data.getString("id").equalsIgnoreCase(item))
+			{
+				ishidden = true;
+				handle404(response);
+				break;
+			}
+		}
+		
+		logger.info("\n ++++ Response from QueryMapper ++++ \n " + requested_data);
+		
+		if(! ishidden)
+		{
+		
+		if(decodeCertificate(routingContext))
+		{
+			totalRequestsPerDay = 10000;
+		}
+		else 
+		{
+			totalRequestsPerDay = 10000; 
+		}
+		
+		Future<Void> validity = validateRequest(routingContext, "search");
+		
+		validity.setHandler(validationResultHandler -> {
+			
+			String token = routingContext.request().getHeader("token");
+			
+			if(validationResultHandler.succeeded()) 
+			{
+				if(token != null)
+				{
+				requested_data.put("token", token);
+				}
+				api = "search";
+				event = "search";
+				metrics = new JsonObject();
+				
+				now = Calendar.getInstance();
+				String nowAsISO = df.format(now.getTime()); 
+				
+				metrics.put("time", new JsonObject().put("$date", nowAsISO));
+				
+				metrics.put("endpoint", api);
+				
+				metrics.put("ip", ip);
+				
+				if(certificateStatus) {
+					metrics.put("emailID", emailID);
+				}
+				
+				switch (decoderequest(requested_data)) {
+
+				case 0:
+					logger.info("case-unknown: invalid api request");
+					handle400(response);
+					break;
+
+				case 1:
+
+					if (requested_data.getString("options").contains("latest")) {
+						logger.info("case-1: latest data for an item in group");
+						options.addHeader("state", Integer.toString(state));
+						options.addHeader("options", "latest");
+						publishEvent(event, requested_data, options, response);
+					}
+
+					else if (requested_data.getString("options").contains("status")) {
+						logger.info("case-1: status for an item in group");
+						options.addHeader("state", Integer.toString(state));
+						options.addHeader("options", "status");
+						publishEvent(event, requested_data, options, response);			
+					}
+					
+					break;
+
+				case 3:
+					logger.info("case-3: time-series data for an item in group");
+					options.addHeader("state", Integer.toString(state));
+					publishEvent(event, requested_data, options, response);
+					break;
+
+				}
+			}
+
+			else 
+			{
+				handle429(response);
+			}
+		});
+	}
+	}
+	
 	private void search(RoutingContext routingContext) {
 
 		HttpServerResponse response = routingContext.response();
