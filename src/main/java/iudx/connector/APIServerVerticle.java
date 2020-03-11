@@ -436,7 +436,7 @@ public class APIServerVerticle extends AbstractVerticle {
 					break;			
 
 				case 8:
-					logger.info("case-8: geo search(Polygon/LineString) for an item group");
+					logger.info("case-8: geo search(Point/Polygon/LineString) for an item group");
 					options.addHeader("state", "8");
 					publishEvent(event,requested_data, options, response);
 					break;			
@@ -531,7 +531,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			break;
 		
         case 10:
-			logger.info("case-10: count for geo search(Polygon/LineString) for an item group");
+			logger.info("case-10: count for geo search(Point/Polygon/LineString) for an item group");
 			options.addHeader("state", "10");
 			options.addHeader("options", "count");
 			publishEvent(event,requested_data, options, response);
@@ -778,6 +778,8 @@ public class APIServerVerticle extends AbstractVerticle {
 				if (reply.contains("allowed_number_of_days")) {
 					handle416(response, reply);
 				} else if (reply.contains("time")) {
+					handle400(response, reply);
+				} else if (reply.contains("geo-issue")) {
 					handle400(response, reply);
 				} else {
 					handle200(response, reply, requested_data);
