@@ -25,10 +25,6 @@ public class Connector extends AbstractVerticle {
 		Launcher.executeCommand("run", Connector.class.getName());
 	}
 	
-	public static void main(String[] args) {
-		Launcher.executeCommand("run", Connector.class.getName());
-	}
-	
 	
 	@Override
 	public void start(Future<Void> startFuture)throws Exception
