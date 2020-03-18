@@ -6,13 +6,7 @@ import java.io.InputStream;
 import java.security.Principal;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Properties;
-import java.util.Set;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -82,7 +76,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	private boolean ishidden = false;
 	private boolean isallowed = false;
 	private String id;
-	HashSet<String> items = new HashSet<String>();
+	Set<String> items = new HashSet<String>();
+	Set<String> itemGroups;
 	private String resourceServerGroup;
 	private String[] group_name;
 	private String resource_group_id;
@@ -151,22 +146,13 @@ public class APIServerVerticle extends AbstractVerticle {
 			allowedresourcegroups = allowedresourcegroup.split(";");
 
 		    FileSystem vertxFileSystem = vertx.fileSystem();
-		    vertxFileSystem.readFile("items.json", readFile -> {
-		        if (readFile.succeeded()) {
-		        	System.out.println("Read the file");
-		        	JsonArray itemsArray = readFile.result().toJsonArray();
 
-		        	for(int i=0;i<itemsArray.size();i++) {
-		        		JsonObject jo = itemsArray.getJsonObject(i);
-		            	String __id = (String) jo.getString("id");
-		            	items.add(__id);
-		            }
-		            
-		            logger.info("Updated items list. Totally loaded " + items.size() + " items");
-		        	
-		        	}
-		        });
-
+			ItemsSingleton iS = ItemsSingleton.getInstance();
+			itemGroups=new HashSet<String>(Arrays.asList(allowedresourcegroups));
+			iS.setItemGroups(itemGroups);
+			items=iS.getItems();
+			logger.info("Updated items list. Totally loaded " + items.size() + " items");
+			
 		    vertxFileSystem.readFile("download.json", readFile -> {
 		        if (readFile.succeeded()) {
 		        	JsonObject j = readFile.result().toJsonObject();
@@ -329,15 +315,19 @@ public class APIServerVerticle extends AbstractVerticle {
 		JsonObject requested_data;
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
-		
-		for (String item: hiddenitems)
-		{
-			ishidden = false;
-			if (requested_data.getString("id").equalsIgnoreCase(item))
+
+		if(requested_data.containsKey("group")){
+			ishidden=false;
+		} else{
+			for (String item: hiddenitems)
 			{
-				ishidden = true;
-				handle404(response);
-				break;
+				ishidden = false;
+				if (requested_data.getString("id").equalsIgnoreCase(item))
+				{
+					ishidden = true;
+					handle404(response);
+					break;
+				}
 			}
 		}
 
@@ -399,7 +389,7 @@ public class APIServerVerticle extends AbstractVerticle {
 					}
 
 					else if (requested_data.getString("options").contains("status")) {
-						logger.info("case-1: status for an item in group");
+						logger.info("case-1: status for an item(s) in group");
 						options.addHeader("state", Integer.toString(state));
 						options.addHeader("options", "status");
 						publishEvent(event, requested_data, options, response);			
@@ -652,24 +642,35 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private int decoderequest(JsonObject requested_data) { 
 
-		id = requested_data.getString("id");
-		splitId = requested_data.getString("id").split("/");
-		resource_group = splitId[3];
-		resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
-		requested_data.put("resource-group-id", resource_group);
-		requested_data.put("resource-id", resource_id);
-		requested_data.remove("id");
-		
 		state = 0;
 
-		if(! items.contains(id)) {
-			state = 0;
+		if (requested_data.containsKey("id")) {
+			id = requested_data.getString("id");
+			splitId = requested_data.getString("id").split("/");
+			resource_group = splitId[3];
+			resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
+			requested_data.put("resource-group-id", resource_group);
+			requested_data.put("resource-id", resource_id);
+			requested_data.remove("id");
+		}
+		else if (requested_data.containsKey("group")){
+			resource_group=requested_data.getString("group");
+			requested_data.put("resource-group-id", resource_group);
+			requested_data.put("group",true);
+		}
+		System.out.println(requested_data);
+		System.out.println(api);
+		System.out.println(resource_group);
+		System.out.println(itemGroups);
+		
+		if(!items.contains(id)  && !itemGroups.contains(resource_group)) {
+			state = 1;
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") 
 				&& (requested_data.getString("options").contains("latest") || requested_data.getString("options").contains("status")) 
-				&& requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& ( requested_data.containsKey("resource-group-id") || requested_data.containsKey("resource-id") )
+				&& !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
 				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 1;
 
@@ -772,7 +773,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private void publishEvent(String event, JsonObject requested_data, DeliveryOptions options, HttpServerResponse response) {
 		
 		vertx.eventBus().request(event, requested_data, options, replyHandler -> {
-			if (replyHandler.succeeded()) 
+			if (replyHandler.succeeded())
 			{
 				String reply = replyHandler.result().body().toString();
 				if (reply.contains("allowed_number_of_days")) {
@@ -784,9 +785,11 @@ public class APIServerVerticle extends AbstractVerticle {
 				} else {
 					handle200(response, reply, requested_data);
 				}
-			} else 
-			{
-				response.setStatusCode(400).end();
+			} else {
+				if(replyHandler.cause().getMessage().equalsIgnoreCase("item-not-found"))
+					handle404(response);
+				else
+					response.setStatusCode(400).end();
 			}
 		});
 	}
