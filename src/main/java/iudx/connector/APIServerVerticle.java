@@ -210,8 +210,9 @@ public class APIServerVerticle extends AbstractVerticle {
 		HttpServerResponse response = routingContext.response();
 		MultiMap params=routingContext.queryParams();
 		DeliveryOptions options = new DeliveryOptions();
-		
+		System.out.println("HIT");
 		JsonObject requested_data=queryMapper.getIUDXQuery(params);
+		logger.info("\n ++++ Response from QueryMapper ++++ \n " + requested_data);
 
 		for (String item: hiddenitems)
 		{
@@ -224,7 +225,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 		}
 		
-		logger.info("\n ++++ Response from QueryMapper ++++ \n " + requested_data);
+
 		
 		if(! ishidden)
 		{
@@ -298,6 +299,18 @@ public class APIServerVerticle extends AbstractVerticle {
 					publishEvent(event, requested_data, options, response);
 					break;
 
+				case 8:
+					logger.info("case-8: geo search(Polygon/LineString) for an item group");
+					options.addHeader("state", "8");
+					publishEvent(event,requested_data, options, response);
+					break;			
+
+				case 11:
+					logger.info("case-11: attribute search for resource for an item group");
+					options.addHeader("state","11");
+					publishEvent(event,requested_data,options,response);
+					break;
+					
 				}
 			}
 
