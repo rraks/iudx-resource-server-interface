@@ -69,6 +69,7 @@ public class SearchVerticle extends AbstractVerticle {
 	Set<String> itemsWithProviderName = new HashSet<String>();
 	Set<String> items = new HashSet<String>();
 	ItemsSingleton itemsSingleton;
+	private boolean isGroupQuery=false;
 	@Override
 	public void start() throws Exception {
 		logger.info("Search Verticle started!");
@@ -135,14 +136,13 @@ public class SearchVerticle extends AbstractVerticle {
 		frequencyOfEmitting.put("pune-iitm-aqi",1d);
 		frequencyOfEmitting.put("pune-iitm-forecast",1d);
 
-		// Varanasi Resource Groups
+		//Varanasi Resource Groups
 		frequencyOfEmitting.put("varanasi-swm-vehicles",1d);
-		frequencyOfEmitting.put("varanasi-aqm",1d);
-		frequencyOfEmitting.put("varanasi-swm-vehicles",1d);
-		frequencyOfEmitting.put("varanasi-swm-wardwiseEmployeeAttendace",1d);
-		frequencyOfEmitting.put("varanasi-swm-workers",1d);
-		frequencyOfEmitting.put("varanasi-iudx-gis",1d);
-		frequencyOfEmitting.put("varanasi-citizen-app",1d);
+		frequencyOfEmitting.put("varanasi-aqm",0.17);
+		frequencyOfEmitting.put("varanasi-swm-bins",0.17);
+		frequencyOfEmitting.put("varanasi-swm-workers",0.5);
+		frequencyOfEmitting.put("varanasi-iudx-gis",0d);
+		frequencyOfEmitting.put("varanasi-citizen-app",6d);
 
 		itemsSingleton=ItemsSingleton.getInstance();
 		itemsWithProviderName=itemsSingleton.getItems();
@@ -188,7 +188,6 @@ public class SearchVerticle extends AbstractVerticle {
 				fields.put(field, 1);
 			}
 		}
-
 		searchDatabase(state, "archive", query, fields, message);
 		}
 	}
@@ -204,7 +203,20 @@ public class SearchVerticle extends AbstractVerticle {
 			resource_group_id = request.getString("resource-group-id");
 			resourceQuery.put("__resource-group",resource_group_id);
 			resource_id = request.getString("resource-id");
-			resourceQuery.put("__resource-id",resource_id);
+			if("group".equalsIgnoreCase(resource_id)){
+				//group query
+				isGroupQuery=true;
+				String currentTimeISO = df.format(Calendar.getInstance().getTime());
+				Instant currentInstant= Instant.parse(currentTimeISO);
+				//allowing group queries not older than a day ie. 24 hours
+				//Can be adjusted as per requirement
+				Instant queryMinTime=currentInstant.minus(Duration.ofHours(24));
+				resourceQuery.put("__time", new JsonObject()
+						.put("$gt",new JsonObject()
+								.put("$date",queryMinTime)));
+			}
+			else
+				resourceQuery.put("__resource-id",resource_id);
 		}catch (Exception e){
 			logger.error("Error: "+ e.getMessage());
 		}
@@ -1024,7 +1036,12 @@ public class SearchVerticle extends AbstractVerticle {
 
 			if (options.contains("latest")) {
 				api = "latest";
-				mongoFind(api, state, COLLECTION, query, findOptions, message);
+				if(isGroupQuery){
+					String resGroupName=request_body.getString("resource-group-id");
+					mongoGroupAgg(resGroupName,query,COLLECTION,message);
+				}
+				else
+					mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
 
 			else if (options.contains("status")) {
@@ -1189,6 +1206,69 @@ public class SearchVerticle extends AbstractVerticle {
 			mongoCount(state,COLLECTION,query,message);
 			break;
 		}
+	}
+
+	private void mongoGroupAgg(String resGroupName,JsonObject query, String collection, Message<Object> message) {
+		Set<String> idFromGroup= new HashSet<>();
+  		for(String item: items){
+			if(item.matches("(.*)"+resGroupName+"(.*)"))
+				idFromGroup.add(item);
+		}
+		int batchSize=idFromGroup.isEmpty()?220:idFromGroup.size();
+
+  		//match query is a similar to mongo.find() queries
+
+  		JsonObject matchStage=new JsonObject()
+				.put("$match",query);
+  		JsonObject groupStage=new JsonObject()
+				.put("$group", new JsonObject()
+						.put("_id","$__resource-id")
+						.put("LUT", new JsonObject()
+								.put("$max","$__time"))
+  						.put("doc",new JsonObject()
+								.put("$first","$$ROOT")));
+  		JsonObject projectStage=new JsonObject()
+				.put("$project", new JsonObject()
+						.put("_id",0)
+						.put("__time",0));
+  		JsonObject replacementStage=new JsonObject()
+				.put("$replaceRoot", new JsonObject()
+						.put("newRoot","$doc"));
+		JsonArray aggPipeline=new JsonArray()
+				.add(matchStage)
+				.add(groupStage)
+				.add(replacementStage)
+				.add(projectStage);
+		JsonObject aggregationCommand=new JsonObject()
+				.put("aggregate", COLLECTION)
+				.put("pipeline",aggPipeline)
+				.put("cursor", new JsonObject().put("batchSize",batchSize));
+
+		logger.info("Tis Aggregation Query "+ aggregationCommand.toString());
+		mongo.runCommand("aggregate", aggregationCommand, res->{
+			if(res.succeeded() && !idFromGroup.isEmpty()) {
+				//Set<String> itemsFromDB = new HashSet();
+				logger.info("GROUP AGG QUERY:========"+ res.result().toString());
+				JsonArray result = res.result().getJsonObject("cursor").getJsonArray("firstBatch");
+				JsonArray response = new JsonArray();
+				if(!result.isEmpty()) {
+					for (Object o : result) {
+						JsonObject j = (JsonObject) o;
+						response.add(j);
+					}
+					logger.info("Latest (Resource Group) aggregation query was successful with "+ response.size()+" documents returned.");
+				}
+				else{
+					logger.info("Aggregation for latest Group API: The result is empty");
+				}
+				message.reply(response);
+			}
+			else{
+				logger.error("Database query has FAILED!!! "+ res.cause());
+				message.fail(1, "item-not-found");
+			}
+
+		});
 	}
 
 	private void mongoAggStatus(String resGroupName, String COLLECTION, JsonObject query, Message<Object> message) {

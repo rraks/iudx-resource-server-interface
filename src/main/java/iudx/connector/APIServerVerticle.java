@@ -45,6 +45,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String event, api;
 	private HashMap<String, String> upstream;
 	int state;
+	boolean validitem;
 	JsonObject metrics;
 	ConcurrentHashMap<String,Integer> validity = new ConcurrentHashMap<String,Integer>();
 	ConcurrentHashMap<String, String> downloadLinks;
@@ -656,18 +657,48 @@ public class APIServerVerticle extends AbstractVerticle {
 	private int decoderequest(JsonObject requested_data) { 
 
 		state = 0;
+		validitem = false;
 
 		if (requested_data.containsKey("id")) {
 			id = requested_data.getString("id");
 			splitId = requested_data.getString("id").split("/");
-			resource_group = splitId[3];
-			resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
-			requested_data.put("resource-group-id", resource_group);
-			requested_data.put("resource-id", resource_id);
+			if(splitId.length == 5){
+				//resourceItem
+				resource_group = splitId[3];
+				resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
+				if (items.contains(id)) {
+					state = 1;
+					validitem = true;
+				} else {
+					state = 0;
+				}
+				requested_data.put("resource-group-id", resource_group);
+				requested_data.put("resource-id", resource_id);
+			}else if(splitId.length == 2){
+				//resourceGroup
+				//reusing resource-id key for group apis
+				//needs better logic and optimization
+				resource_group = splitId[1];
+				if (itemGroups.contains(resource_group)) {
+					state = 1;
+					validitem = true;
+				} else {
+					state = 0;
+				}
+				requested_data.put("resource-group-id", resource_group);
+				requested_data.put("resource-id", "group");
+			}
 			requested_data.remove("id");
 		}
 		else if (requested_data.containsKey("group")){
+			//for status api
 			resource_group=requested_data.getString("group");
+			if (itemGroups.contains(resource_group)) {
+				state = 1;
+				validitem = true;
+			} else {
+				state = 0;
+			}
 			requested_data.put("resource-group-id", resource_group);
 			requested_data.put("group",true);
 		}
@@ -676,11 +707,9 @@ public class APIServerVerticle extends AbstractVerticle {
 		System.out.println(resource_group);
 		System.out.println(itemGroups);
 		
-		if(!items.contains(id)  && !itemGroups.contains(resource_group)) {
-			state = 1;
-		}
-
-		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") 
+		if(validitem)
+		{
+		 if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") 
 				&& (requested_data.getString("options").contains("latest") || requested_data.getString("options").contains("status")) 
 				&& ( requested_data.containsKey("resource-group-id") || requested_data.containsKey("resource-id") )
 				&& !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
@@ -778,6 +807,7 @@ public class APIServerVerticle extends AbstractVerticle {
 				&& !requested_data.containsKey("time") && !requested_data.containsKey("TRelation")
 				&& !requested_data.containsKey("lat") && !requested_data.containsKey("geometry") && !requested_data.containsKey("bbox")){
 			state=12;
+		}
 		}
 		System.out.println("STATE: "+ state);
 		return state;
