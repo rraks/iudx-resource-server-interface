@@ -16,7 +16,7 @@
 		<mustache.version>0.9.5</mustache.version>
 		<postgresql.version>42.2.5</postgresql.version>
 		<main.class>vertx.App</main.class>
-		<stack.version>3.8.1</stack.version>
+		<stack.version>3.9.0</stack.version>
 		<vertx.version>4.0.0-SNAPSHOT</vertx.version>
     	<main.verticle>iudx.connector.Connector</main.verticle>
     	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
