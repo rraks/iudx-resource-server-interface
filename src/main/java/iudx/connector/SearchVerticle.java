@@ -28,6 +28,7 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.mongo.FindOptions;
 import io.vertx.ext.mongo.MongoClient;
+import org.bson.json.JsonParseException;
 
 public class SearchVerticle extends AbstractVerticle {
 
@@ -144,14 +145,20 @@ public class SearchVerticle extends AbstractVerticle {
 		frequencyOfEmitting.put("varanasi-iudx-gis",0d);
 		frequencyOfEmitting.put("varanasi-citizen-app",6d);
 
-		itemsSingleton=ItemsSingleton.getInstance();
-		itemsWithProviderName=itemsSingleton.getItems();
-		for(String s: itemsWithProviderName){
-			String s1[]=s.split("/");
-			String s2=s1[2]+"/"+s1[3]+"/"+s1[4];
-			items.add(s2);
+		try{
+			itemsSingleton=ItemsSingleton.getInstance();
+			itemsWithProviderName=itemsSingleton.getItems();
+			for(String s: itemsWithProviderName){
+				String s1[]=s.split("/");
+				String s2=s;
+				if(s1.length == 5)
+					s2=s1[2]+"/"+s1[3]+"/"+s1[4];
+				items.add(s2);
+			}
+			logger.info("(SEARCH VERTICLE)**** Items Set contains "+items.size()+ " items");
+		}catch (Exception e){
+			logger.info("(SEARCH VERTICLE)**** Items Set- "+e.getMessage());
 		}
-		logger.info("(SEARCH VERTICLE)**** Items Set contains "+items.size()+ " items");
 	}
 
 	private void search(Message<Object> message) {
@@ -173,6 +180,8 @@ public class SearchVerticle extends AbstractVerticle {
 			message.reply(query);
 		} else if(query.containsKey("geo-issue")) {
 			message.reply(query);
+		} else if(query.containsKey("static")){
+			message.fail(0, "Static data does not support latest query");
 		}
 		else {
 		JsonObject fields = new JsonObject();
@@ -203,17 +212,24 @@ public class SearchVerticle extends AbstractVerticle {
 			resource_group_id = request.getString("resource-group-id");
 			resourceQuery.put("__resource-group",resource_group_id);
 			resource_id = request.getString("resource-id");
-			if("group".equalsIgnoreCase(resource_id)){
+			if(resource_group_id.equalsIgnoreCase(resource_id) && "latest".equalsIgnoreCase(request.getString("options"))){
 				//group query
-				isGroupQuery=true;
-				String currentTimeISO = df.format(Calendar.getInstance().getTime());
-				Instant currentInstant= Instant.parse(currentTimeISO);
-				//allowing group queries not older than a day ie. 24 hours
-				//Can be adjusted as per requirement
-				Instant queryMinTime=currentInstant.minus(Duration.ofHours(24));
-				resourceQuery.put("__time", new JsonObject()
-						.put("$gt",new JsonObject()
-								.put("$date",queryMinTime)));
+				if("varanasi-iudx-gis".equalsIgnoreCase(resource_group_id)) {
+					logger.info("*** SEARCH-VERTICLE === Queried latest for static GIS data");
+					return new JsonObject().put("static",true) ;
+				}else {
+					logger.info("*** SEARCH-VERTICLE === Group API call");
+					isGroupQuery=true;
+					String currentTimeISO = df.format(Calendar.getInstance().getTime());
+					Instant currentInstant= Instant.parse(currentTimeISO);
+					//allowing group queries not older than a day ie. 24 hours
+					//Can be adjusted as per requirement
+					Instant queryMinTime=currentInstant.minus(Duration.ofHours(24));
+					resourceQuery.put("__time", new JsonObject()
+							.put("$gt",new JsonObject()
+									.put("$date",queryMinTime)));
+				}
+				//return resourceQuery;
 			}
 			else
 				resourceQuery.put("__resource-id",resource_id);
@@ -222,16 +238,16 @@ public class SearchVerticle extends AbstractVerticle {
 		}
 		geo_attribute_query = false;
 		
-		if(resource_group_id.equalsIgnoreCase("pune-itms")) {
+		if("pune-itms".equalsIgnoreCase(resource_group_id)) {
 			allowed_number_of_days = 1;
 		} else {
-			allowed_number_of_days = 15;				
+			allowed_number_of_days = 30;
 		}
 	
 		switch (state) {
 		case 1:
 			options = request.getString("options");
-			if(!(request.containsKey("group")))
+			if(isGroupQuery || !(request.containsKey("group")))
 				return resourceQuery;
 			else{
 				query.put("__resource-group",resource_group_id);
@@ -244,16 +260,19 @@ public class SearchVerticle extends AbstractVerticle {
 			return query;
 
 		case 3:
-			query = constructTimeSeriesQuery(request);
-			break;
+//			query = constructTimeSeriesQuery(request);
+//			break;
 
 		case 4:
 			query = constructTimeSeriesQuery(request);
 			break;
 
 		case 5:
-			query = constructGeoCircleQuery(request);
-			break;
+//			if(!isGroupQuery && "within".equalsIgnoreCase(request.getString("relation")))
+//				query = constructGeoCircleQuery(request);
+//			else
+//				return resourceQuery;
+//			break;
 
 		case 6:
 			query = constructGeoCircleQuery(request);
@@ -276,8 +295,8 @@ public class SearchVerticle extends AbstractVerticle {
             break;
 
 		case 11:
-			query = constructAttributeQuery(request);
-			break;
+//			query = constructAttributeQuery(request);
+//			break;
 
 		case 12:
 			query = constructAttributeQuery(request);
@@ -299,7 +318,7 @@ public class SearchVerticle extends AbstractVerticle {
 		else {
 			expressions = new JsonArray();
 
-			if(! request.containsKey("time") && ! request.containsKey("options"))
+			if(!isGroupQuery && ! request.containsKey("time") && ! request.containsKey("options"))
 			{
 				JsonObject timeQuery = new JsonObject();
 
@@ -330,11 +349,6 @@ public class SearchVerticle extends AbstractVerticle {
 			System.out.println("FINAL QUERY: " + finalQuery.toString());
 		}
 		return finalQuery;
-	}
-
-	private void statusForRG(String resource_group_id, Message<Object> message) {
-
-
 	}
 
 	double MetersToDecimalDegrees(double meters, double latitude) {
@@ -552,6 +566,9 @@ public class SearchVerticle extends AbstractVerticle {
 			return finalGeoQuery;
 		}
 
+		if(isGroupQuery)
+			relation="within";
+
         if ("within".equalsIgnoreCase(relation)){
         	/**
 			 * Query GeoWithin format-
@@ -562,6 +579,7 @@ public class SearchVerticle extends AbstractVerticle {
 					new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
         }
         else if("intersects".equalsIgnoreCase(relation)){
+
         	/**
 			 * Query NearSphere format-
 			 * {__geoJsonLocation: {$nearSphere: {$geometry: {type: Point, coordinates: [lon,lat]}, $maxDistance: rad}}}
@@ -1020,7 +1038,7 @@ public class SearchVerticle extends AbstractVerticle {
 		String api;
 		JsonObject request_body = (JsonObject) message.body();
 		System.out.println(request_body);
-
+		String resGroupName=request_body.getString("resource-group-id");
 		switch (state) {
 
 		case 1:
@@ -1036,10 +1054,9 @@ public class SearchVerticle extends AbstractVerticle {
 
 			if (options.contains("latest")) {
 				api = "latest";
-				if(isGroupQuery){
-					String resGroupName=request_body.getString("resource-group-id");
-					mongoGroupAgg(resGroupName,query,COLLECTION,message);
-				}
+				if(isGroupQuery)
+					mongoGroupAgg(resGroupName,query,attributeFilter,message);
+
 				else
 					mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
@@ -1079,7 +1096,6 @@ public class SearchVerticle extends AbstractVerticle {
                 findOptions.setSort(sortFilter);
 
 				if(request_body.containsKey("group") && request_body.getBoolean("group")){
-					String resGroupName=request_body.getString("resource-group-id");
 					mongoAggStatus(resGroupName, COLLECTION, query, message);
 				}else
 				mongoFind(api, state, COLLECTION, finalQuery, findOptions, message);
@@ -1116,21 +1132,25 @@ public class SearchVerticle extends AbstractVerticle {
 		case 5:
 			api = "search";
 			attributeFilter.put("_id", 0);
-			sortFilter = new JsonObject();
-			sortFilter.put("__time", -1);
+			if(isGroupQuery){
+				mongoGroupAgg(resGroupName,query,attributeFilter,message);
+			}else {
+				sortFilter = new JsonObject();
+				sortFilter.put("__time", -1);
 
-			findOptions = new FindOptions();
-			findOptions.setFields(attributeFilter);
-			findOptions.setSort(sortFilter);
-			if(request_body.containsKey("options")) {
-				if(request_body.getString("options").equalsIgnoreCase("latest")) {
-					findOptions.setLimit(1);
-				} else {
-					message.fail(1, "invalid-options");
-					break;
+				findOptions = new FindOptions();
+				findOptions.setFields(attributeFilter);
+				findOptions.setSort(sortFilter);
+				if(request_body.containsKey("options")) {
+					if(request_body.getString("options").equalsIgnoreCase("latest")) {
+						findOptions.setLimit(1);
+					} else {
+						message.fail(1, "invalid-options");
+						break;
+					}
 				}
+				mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
-			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
 		case 6:
@@ -1141,39 +1161,47 @@ public class SearchVerticle extends AbstractVerticle {
 		case 7:
 			api="search";
 			attributeFilter.put("_id", 0);
-			sortFilter = new JsonObject();
-			sortFilter.put("__time", -1);
-			findOptions = new FindOptions();
-			findOptions.setFields(attributeFilter);
-			findOptions.setSort(sortFilter);
-			if(request_body.containsKey("options")) {
-				if(request_body.getString("options").equalsIgnoreCase("latest")) {
-					findOptions.setLimit(1);
-				} else {
-					message.fail(1, "invalid-options");
-					break;
+			if(isGroupQuery){
+				mongoGroupAgg(resGroupName,query,attributeFilter,message);
+			}else {
+				sortFilter = new JsonObject();
+				sortFilter.put("__time", -1);
+				findOptions = new FindOptions();
+				findOptions.setFields(attributeFilter);
+				findOptions.setSort(sortFilter);
+				if (request_body.containsKey("options")) {
+					if (request_body.getString("options").equalsIgnoreCase("latest")) {
+						findOptions.setLimit(1);
+					} else {
+						message.fail(1, "invalid-options");
+						break;
+					}
 				}
+				mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
-			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
 		case 8:
 			api="search";
 			attributeFilter.put("_id", 0);
-			sortFilter = new JsonObject();
-			sortFilter.put("__time", -1);
-			findOptions = new FindOptions();
-			findOptions.setFields(attributeFilter);
-			findOptions.setSort(sortFilter);
-			if(request_body.containsKey("options")) {
-				if(request_body.getString("options").equalsIgnoreCase("latest")) {
-					findOptions.setLimit(1);
-				} else {
-					message.fail(1, "invalid-options");
-					break;
+			if(isGroupQuery){
+				mongoGroupAgg(resGroupName,query,attributeFilter,message);
+			}else {
+				sortFilter = new JsonObject();
+				sortFilter.put("__time", -1);
+				findOptions = new FindOptions();
+				findOptions.setFields(attributeFilter);
+				findOptions.setSort(sortFilter);
+				if (request_body.containsKey("options")) {
+					if (request_body.getString("options").equalsIgnoreCase("latest")) {
+						findOptions.setLimit(1);
+					} else {
+						message.fail(1, "invalid-options");
+						break;
+					}
 				}
+				mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
-			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
 		case 9:
@@ -1189,16 +1217,20 @@ public class SearchVerticle extends AbstractVerticle {
 		case 11:
 			api="search";
 			attributeFilter.put("_id", 0);
-			JsonObject obj = (JsonObject) message.body();
-			String requestOptions = obj.containsKey("options")?obj.getString("options"):null;
-			findOptions = new FindOptions();
-			if(requestOptions!=null){
-				JsonObject sortFil = new JsonObject().put("__time",-1);
-				findOptions.setSort(sortFil);
-				findOptions.setLimit(1);
+			if(isGroupQuery){
+				mongoGroupAgg(resGroupName,query,attributeFilter,message);
+			}else {
+				JsonObject obj = (JsonObject) message.body();
+				String requestOptions = obj.containsKey("options") ? obj.getString("options") : null;
+				findOptions = new FindOptions();
+				if (requestOptions != null) {
+					JsonObject sortFil = new JsonObject().put("__time", -1);
+					findOptions.setSort(sortFil);
+					findOptions.setLimit(1);
+				}
+				findOptions.setFields(attributeFilter);
+				mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
-			findOptions.setFields(attributeFilter);
-			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
 		case 12:
@@ -1208,18 +1240,156 @@ public class SearchVerticle extends AbstractVerticle {
 		}
 	}
 
-	private void mongoGroupAgg(String resGroupName,JsonObject query, String collection, Message<Object> message) {
+//	private void mongoGroupGeoCircle(String resGroupName,JsonObject attributeFilter, Message<Object> message){
+//		Set<String> idFromGroup= new HashSet<>();
+//		for(String item: items){
+//			if(item.matches("(.*)"+resGroupName+"(.*)"))
+//				idFromGroup.add(item);
+//		}
+//		int batchSize=idFromGroup.isEmpty()?220:idFromGroup.size();
+//		double latitude=0.0, longitude=0.0, rad=0.0;
+//
+//		JsonObject request= (JsonObject) message.body();
+//		try{
+//			latitude = request.containsKey("lat")?Double.parseDouble(request.getString("lat")):0.0;
+//			longitude = request.containsKey("lon")?Double.parseDouble(request.getString("lon")):0.0;
+//			relation= request.containsKey("relation")?request.getString("relation"):"intersects";
+//			boolean valid = validateRelation(geometry, relation);
+//			if (!valid) {
+//				message.fail(0,"Invalid Relation!");
+//
+//			}
+//		}catch (Exception e){
+//			logger.info("SEARCH_VERTICLE/constructGeoCircleQuery: "+ e.getMessage());
+//			message.fail(0,"Invalid GEO-Query!");
+//
+//		}
+//		JsonArray coordinates=new JsonArray().add(longitude).add(latitude);
+//		rad=request.containsKey("radius")?(Double.parseDouble(request.getString("radius"))):0;
+//		String currentTimeISO = df.format(Calendar.getInstance().getTime());
+//		Instant currentInstant= Instant.parse(currentTimeISO);
+//		//allowing group queries not older than a day ie. 24 hours
+//		//Can be adjusted as per requirement
+//		Instant queryMinTime=currentInstant.minus(Duration.ofHours(24));
+//		JsonObject query=new JsonObject().put("__resource-group",resGroupName)
+//				.put("__time", new JsonObject()
+//				.put("$gt",new JsonObject()
+//						.put("$date",queryMinTime)));
+//		JsonObject geoNearStage=new JsonObject()
+//				.put("$geoNear", new JsonObject()
+//						.put("near", new JsonObject()
+//								.put("Point",coordinates))
+//						.put("distanceField", "distanceFromPoint")
+//						.put("maxDistance",rad)
+//						.put("query", query))
+//						.put("spherical",true);
+//		JsonObject groupStage=new JsonObject()
+//				.put("$group", new JsonObject()
+//						.put("_id","$__resource-id")
+//						.put("LUT", new JsonObject()
+//								.put("$max","$__time"))
+//						.put("doc",new JsonObject()
+//								.put("$first","$$ROOT")));
+//		if(attributeFilter.size()==0)
+//			attributeFilter.put("_id",0)
+//					.put("__resource-id",0)
+//					.put("__time",0);
+//		else
+//			attributeFilter.put("_id",0);
+//		JsonObject projectStage=new JsonObject()
+//				.put("$project",attributeFilter);
+//		JsonObject replacementStage=new JsonObject()
+//				.put("$replaceRoot", new JsonObject()
+//						.put("newRoot","$doc"));
+//		JsonArray aggPipeline=new JsonArray()
+//				.add(geoNearStage)
+//				.add(groupStage)
+//				.add(replacementStage)
+//				.add(projectStage);
+//		JsonObject aggregationCommand=new JsonObject()
+//				.put("aggregate", COLLECTION)
+//				.put("pipeline",aggPipeline)
+//				.put("cursor", new JsonObject().put("batchSize",batchSize));
+//		logger.info("Tis Aggregation Query "+ aggregationCommand.toString());
+//		mongo.runCommand("aggregate", aggregationCommand, res->{
+//			if(res.succeeded() && !idFromGroup.isEmpty()) {
+//				//Set<String> itemsFromDB = new HashSet();
+//				logger.info("GROUP AGG QUERY:========"+ res.result().toString());
+//				JsonArray result = res.result().getJsonObject("cursor").getJsonArray("firstBatch");
+//				JsonArray response = new JsonArray();
+//				if(!result.isEmpty()) {
+//					for (Object o : result) {
+//						JsonObject j = (JsonObject) o;
+//						response.add(j);
+//					}
+//					logger.info("Latest (Resource Group) aggregation query was successful with "+ response.size()+" documents returned.");
+//				}
+//				else{
+//					logger.info("Aggregation for latest Group API: The result is empty");
+//				}
+//				message.reply(response);
+//			}
+//			else{
+//				logger.error("Database query has FAILED!!! "+ res.cause());
+//				message.fail(1, "item-not-found");
+//			}
+//
+//		});
+//	}
+	private void mongoGroupAgg(String resGroupName,JsonObject query, JsonObject attributeFilter, Message<Object> message) {
 		Set<String> idFromGroup= new HashSet<>();
+//		double latitude=0.0, longitude=0.0, rad=0.0;
+		JsonObject matchStage=new JsonObject();
+		JsonArray aggPipeline=new JsonArray();
+//		JsonObject geoNearStage = new JsonObject();
+
   		for(String item: items){
 			if(item.matches("(.*)"+resGroupName+"(.*)"))
 				idFromGroup.add(item);
 		}
 		int batchSize=idFromGroup.isEmpty()?220:idFromGroup.size();
-
+		//boolean isCircleIntersect=false;
   		//match query is a similar to mongo.find() queries
 
-  		JsonObject matchStage=new JsonObject()
-				.put("$match",query);
+//		JsonObject request= (JsonObject) message.body();
+//		if(request.containsKey("lat")&&request.containsKey("lon")
+//				&&request.containsKey("relation")&& "intersects".equalsIgnoreCase(request.getString("relation"))) {
+//			logger.info("***** SEARCH-VERTICLE ===== Geo Circle Intersect Group API");
+//			isCircleIntersect=true;
+//			try{
+//				latitude = Double.parseDouble(request.getString("lat"));
+//				longitude = Double.parseDouble(request.getString("lon"));
+//				relation= request.getString("relation");
+//				boolean valid = validateRelation("circle", relation);
+//				if (!valid) {
+//					logger.info("SEARCH_VERTICLE/constructGeoCircleQuery Invalid relation");
+//					message.fail(0,"Invalid Relation!");
+//				}
+//			}catch (Exception e){
+//				logger.info("SEARCH_VERTICLE/constructGeoCircleQuery: "+ e.getMessage());
+//				message.fail(0,"Invalid GEO-Query!");
+//
+//			}
+//			JsonArray coordinates=new JsonArray().add(longitude).add(latitude);
+//			rad=request.containsKey("radius")?(Double.parseDouble(request.getString("radius"))):0;
+//			geoNearStage.put("$geoNear", new JsonObject()
+//							.put("near", new JsonObject()
+//									.put("type", "Point")
+//									.put("coordinates",coordinates))
+//							.put("distanceField", "distanceFromPoint")
+//							.put("maxDistance", rad)
+//							.put("query", query)
+//							.put("spherical", true));
+//
+//			aggPipeline.add(geoNearStage);
+//		}
+//		if(!isCircleIntersect) {
+//			matchStage.put("$match", query);
+//			aggPipeline.add(matchStage);
+//		}
+		matchStage.put("$match", query);
+		aggPipeline.add(matchStage);
+
   		JsonObject groupStage=new JsonObject()
 				.put("$group", new JsonObject()
 						.put("_id","$__resource-id")
@@ -1227,18 +1397,20 @@ public class SearchVerticle extends AbstractVerticle {
 								.put("$max","$__time"))
   						.put("doc",new JsonObject()
 								.put("$first","$$ROOT")));
+
+  		logger.info("ATTRIBUTE FILTER SIZE############# "+ attributeFilter.toString());
+  		if(attributeFilter.size()==1)
+  			attributeFilter.put("__time",0);
+
   		JsonObject projectStage=new JsonObject()
-				.put("$project", new JsonObject()
-						.put("_id",0)
-						.put("__time",0));
+				.put("$project",attributeFilter);
+
   		JsonObject replacementStage=new JsonObject()
 				.put("$replaceRoot", new JsonObject()
 						.put("newRoot","$doc"));
-		JsonArray aggPipeline=new JsonArray()
-				.add(matchStage)
-				.add(groupStage)
-				.add(replacementStage)
-				.add(projectStage);
+
+  		aggPipeline.add(groupStage).add(replacementStage).add(projectStage);
+
 		JsonObject aggregationCommand=new JsonObject()
 				.put("aggregate", COLLECTION)
 				.put("pipeline",aggPipeline)
@@ -1374,7 +1546,8 @@ public class SearchVerticle extends AbstractVerticle {
 
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
-		String[] hiddenFields = { "__resource-id", "__time", "_id", "__resource-group" };
+		// String[] hiddenFields = { "__resource-id", "__time", "_id", "__resource-group" };
+		String[] hiddenFields = { "__time", "_id"};
 		JsonObject requested_body = new JsonObject(message.body().toString());
 		final long starttime = System.currentTimeMillis();
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
