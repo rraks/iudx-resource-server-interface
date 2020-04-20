@@ -3,6 +3,7 @@ src/main/java/iudx/connector/.*
 ./config.properties
 
 
+auth/
 /target/
 /logs/
 
