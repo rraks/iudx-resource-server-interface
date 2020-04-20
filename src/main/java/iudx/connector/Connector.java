@@ -79,8 +79,19 @@ public class Connector extends AbstractVerticle {
 																				startFuture.fail(validity.cause().toString());
 																			}
 
-																			startFuture.complete();
 
+																			deployHelper(AuthVerticle.class.getName())
+																					.setHandler(auth -> {
+
+																						if(!auth.succeeded())
+																						{
+																							logger.debug(auth.cause());
+																							startFuture.fail(auth.cause().toString());
+																						}
+
+																						startFuture.complete();
+
+																					});
 																		});
 															});
 												});
