@@ -97,6 +97,7 @@ public class AuthVerticle extends AbstractVerticle {
                                     .replace("/", "\\/")
                                     .replace(".", "\\.")
                                     .replace("*", ".*"));
+
                             if (patObj.matcher(id).matches()) validToken = 1;
                         }
                         if (validToken == 1 ){
