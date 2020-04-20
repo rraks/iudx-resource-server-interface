@@ -229,8 +229,6 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 		}
 		
-
-		
 		if(! ishidden)
 		{
 		
@@ -333,14 +331,12 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
 
-		if(requested_data.containsKey("group")){
-			ishidden=false;
-		} else{
-			for (String item: hiddenitems)
-			{
+		if (requested_data.containsKey("group")) {
+			ishidden = false;
+		} else {
+			for (String item : hiddenitems) {
 				ishidden = false;
-				if (requested_data.getString("id").equalsIgnoreCase(item))
-				{
+				if (requested_data.getString("id").equalsIgnoreCase(item)) {
 					ishidden = true;
 					handle404(response);
 					break;
@@ -348,225 +344,252 @@ public class APIServerVerticle extends AbstractVerticle {
 			}
 		}
 
-		if(! ishidden)
-		{
-		
-		if(decodeCertificate(routingContext))
-		{
-			totalRequestsPerDay = 10000;
-		}
-		else 
-		{
-			totalRequestsPerDay = 10000; 
-		}
-		
-		Future<Void> validity = validateRequest(routingContext, "search");
-		
-		validity.setHandler(validationResultHandler -> {
-			
-			String token = routingContext.request().getHeader("token");
-			
-			if(validationResultHandler.succeeded()) 
-			{
-				if(token != null)
-				{
-				requested_data.put("token", token);
-				}
-				api = "search";
-				event = "search";
-				metrics = new JsonObject();
-				
-				now = Calendar.getInstance();
-				String nowAsISO = df.format(now.getTime()); 
-				
-				metrics.put("time", new JsonObject().put("$date", nowAsISO));
-				
-				metrics.put("endpoint", api);
-				
-				metrics.put("ip", ip);
-				
-				if(certificateStatus) {
-					metrics.put("emailID", emailID);
-				}
-				
-				switch (decoderequest(requested_data)) {
+		if (!ishidden) {
 
-				case 0:
-					logger.info("case-unknown: invalid api request");
-					handle400(response);
-					break;
-
-				case 1:
-
-					if (requested_data.getString("options").contains("latest")) {
-						logger.info("case-1: latest data for an item in group");
-						options.addHeader("state", Integer.toString(state));
-						options.addHeader("options", "latest");
-						publishEvent(event, requested_data, options, response);
-					}
-
-					else if (requested_data.getString("options").contains("status")) {
-						logger.info("case-1: status for an item(s) in group");
-						options.addHeader("state", Integer.toString(state));
-						options.addHeader("options", "status");
-						publishEvent(event, requested_data, options, response);			
-					}
-
-					
-					break;
-
-				case 2:
-					logger.info("case-2: latest data for all the items in group");
-					options.addHeader("state", Integer.toString(state));
-					publishEvent(event, requested_data, options, response);
-					break;
-
-				case 3:
-					logger.info("case-3: time-series data for an item in group");
-					options.addHeader("state", Integer.toString(state));
-					publishEvent(event, requested_data, options, response);
-					break;
-
-				case 4:
-					break;
-					
-				case 5:
-					logger.info("case-5: geo search for an item group");
-					options.addHeader("state", Integer.toString(state));
-					publishEvent(event, requested_data, options, response);
-					break;			
-					
-				case 7:
-					logger.info("case-7: geo search(bbox) for an item group");
-					options.addHeader("state", "7");
-					publishEvent(event,requested_data, options, response);
-					break;			
-
-				case 8:
-					logger.info("case-8: geo search(Point/Polygon/LineString) for an item group");
-					options.addHeader("state", "8");
-					publishEvent(event,requested_data, options, response);
-					break;			
-
-
-				case 11:
-					logger.info("case-11: attribute search for resource for an item group");
-					options.addHeader("state","11");
-					publishEvent(event,requested_data,options,response);
-					break;
-
-				}
-			
+			if (decodeCertificate(routingContext)) {
+				totalRequestsPerDay = 10000;
+			} else {
+				totalRequestsPerDay = 10000;
 			}
 
-			else 
-			{
-				handle429(response);
-			}
-		});
+			Future<Void> validity = validateRequest(routingContext, "search");
+
+			validity.setHandler(validationResultHandler -> {
+
+				String token = routingContext.request().getHeader("token");
+
+				if (validationResultHandler.succeeded()) {
+					if (token != null) {
+						requested_data.put("token", token);
+					}
+					api = "search";
+					event = "search";
+					metrics = new JsonObject();
+
+					now = Calendar.getInstance();
+					String nowAsISO = df.format(now.getTime());
+
+					metrics.put("time", new JsonObject().put("$date", nowAsISO));
+
+					metrics.put("endpoint", api);
+
+					metrics.put("ip", ip);
+
+					if (certificateStatus) {
+						metrics.put("emailID", emailID);
+					}
+
+					Future<Void> introspect = tokenintrospect(requested_data);
+					introspect.setHandler(introspectResultHandler -> {
+						if (introspectResultHandler.succeeded()) {
+							
+							switch (decoderequest(requested_data)) {
+
+							case 0:
+								logger.info("case-unknown: invalid api request");
+								handle400(response);
+								break;
+
+							case 1:
+
+								if (requested_data.getString("options").contains("latest")) {
+									logger.info("case-1: latest data for an item in group");
+									options.addHeader("state", Integer.toString(state));
+									options.addHeader("options", "latest");
+									publishEvent(event, requested_data, options, response);
+								}
+
+								else if (requested_data.getString("options").contains("status")) {
+									logger.info("case-1: status for an item(s) in group");
+									options.addHeader("state", Integer.toString(state));
+									options.addHeader("options", "status");
+									publishEvent(event, requested_data, options, response);
+								}
+
+								break;
+
+							case 2:
+								logger.info("case-2: latest data for all the items in group");
+								options.addHeader("state", Integer.toString(state));
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 3:
+								logger.info("case-3: time-series data for an item in group");
+								options.addHeader("state", Integer.toString(state));
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 4:
+								break;
+
+							case 5:
+								logger.info("case-5: geo search for an item group");
+								options.addHeader("state", Integer.toString(state));
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 7:
+								logger.info("case-7: geo search(bbox) for an item group");
+								options.addHeader("state", "7");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 8:
+								logger.info("case-8: geo search(Point/Polygon/LineString) for an item group");
+								options.addHeader("state", "8");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 11:
+								logger.info("case-11: attribute search for resource for an item group");
+								options.addHeader("state", "11");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							}
+						} else {
+							System.out.println("Failed");
+							handle400(response);
+						}
+					});
+				}
+
+				else {
+					handle429(response);
+				}
+			});
+		}
 	}
-	}
+
 	private void count(RoutingContext routingContext) {
 
 		HttpServerResponse response = routingContext.response();
 		JsonObject requested_data;
 		DeliveryOptions options = new DeliveryOptions();
 		requested_data = routingContext.getBodyAsJson();
-		
-		for (String item: hiddenitems)
-		{
+
+		for (String item : hiddenitems) {
 			ishidden = false;
-			if (requested_data.getString("id").equalsIgnoreCase(item))
-			{
+			if (requested_data.getString("id").equalsIgnoreCase(item)) {
 				ishidden = true;
 				handle404(response);
 				break;
 			}
 		}
 
-		if(! ishidden)
-		{
+		if (!ishidden) {
 
-		if(decodeCertificate(routingContext))
-		{
-			totalRequestsPerDay = 10000;
+			if (decodeCertificate(routingContext)) {
+				totalRequestsPerDay = 10000;
+			} else {
+				totalRequestsPerDay = 10000;
+			}
+
+			Future<Void> validity = validateRequest(routingContext, "count");
+			validity.setHandler(validationResultHandler -> {
+				String token = routingContext.request().getHeader("token");
+
+				if (validationResultHandler.succeeded()) {
+					if (token != null) {
+						requested_data.put("token", token);
+					}
+
+					api = "count";
+					event = "search";
+
+					metrics = new JsonObject();
+
+					now = Calendar.getInstance();
+					String nowAsISO = df.format(now.getTime());
+
+					metrics.put("time", new JsonObject().put("$date", nowAsISO));
+					metrics.put("endpoint", api);
+					metrics.put("ip", ip);
+
+					Future<Void> introspect = tokenintrospect(requested_data);
+					introspect.setHandler(introspectResultHandler -> {
+						if (introspectResultHandler.succeeded()) {
+
+							switch (decoderequest(requested_data)) {
+
+							case 4:
+								logger.info("case-4: count for time-series data for an item in group");
+								options.addHeader("state", Integer.toString(state));
+								options.addHeader("options", "count");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 6:
+								logger.info("case-6: count for geo search for an item group");
+								options.addHeader("state", Integer.toString(state));
+								options.addHeader("options", "count");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 9:
+								logger.info("case-9: count for geo search(bbox) for an item group");
+								options.addHeader("state", "9");
+								options.addHeader("options", "count");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 10:
+								logger.info(
+										"case-10: count for geo search(Point/Polygon/LineString) for an item group");
+								options.addHeader("state", "10");
+								options.addHeader("options", "count");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							case 12:
+								logger.info("case-12: count for attribute search for an item group");
+								options.addHeader("state", "12");
+								options.addHeader("options", "count");
+								publishEvent(event, requested_data, options, response);
+								break;
+
+							default:
+								logger.info("case-unknown: invalid api request");
+								handle400(response);
+								break;
+							}
+						} else {
+							handle400(response);
+						}
+					});
+				}
+
+				else {
+					handle429(response);
+				}
+
+			});
 		}
-		else 
-		{
-			totalRequestsPerDay = 10000; 
-		}
-		
-		Future<Void> validity = validateRequest(routingContext, "count");
-		validity.setHandler(validationResultHandler -> {
-			
-		if(validationResultHandler.succeeded()) 
-		{
-
-		api = "count";
-		event = "search"; 
-		
-		metrics = new JsonObject();
-
-		now = Calendar.getInstance();
-		String nowAsISO = df.format(now.getTime()); 
-		
-		metrics.put("time", new JsonObject().put("$date", nowAsISO));
-		metrics.put("endpoint", api);
-		metrics.put("ip", ip);
-		
-		switch (decoderequest(requested_data)) {
-
-		case 4:
-			logger.info("case-4: count for time-series data for an item in group");
-			options.addHeader("state", Integer.toString(state));
-			options.addHeader("options", "count");
-			publishEvent(event, requested_data, options, response);
-			break;
-			
-		case 6:
-			logger.info("case-6: count for geo search for an item group");
-			options.addHeader("state", Integer.toString(state));
-			options.addHeader("options", "count");
-			publishEvent(event, requested_data, options, response);
-			break;
-		
-        case 9:
-			logger.info("case-9: count for geo search(bbox) for an item group");
-			options.addHeader("state", "9");
-			options.addHeader("options", "count");
-			publishEvent(event,requested_data, options, response);
-			break;
-		
-        case 10:
-			logger.info("case-10: count for geo search(Point/Polygon/LineString) for an item group");
-			options.addHeader("state", "10");
-			options.addHeader("options", "count");
-			publishEvent(event,requested_data, options, response);
-			break;
-
-		case 12:
-			logger.info("case-12: count for attribute search for an item group");
-			options.addHeader("state","12");
-			options.addHeader("options","count");
-			publishEvent(event,requested_data,options, response);
-			break;
-			
-		default:
-			logger.info("case-unknown: invalid api request");
-			handle400(response);
-			break;
-			}
-			}
-		
-			else 
-			{
-				handle429(response);
-			}
-			
-		});
-	}
 	}
 	
+	private Future<Void> tokenintrospect(JsonObject requested_data) {
+
+		Future<Void> introspect = Future.future();
+		if (requested_data.containsKey("token")) {
+
+			vertx.eventBus().request("token-introspect", requested_data, replyHandler -> {
+				logger.info("+++++++++++++++++ Token Provided +++++++++++++++++");
+				if (replyHandler.succeeded()) {
+					logger.info("+++++++++++++++++ TIP Success +++++++++++++++++");
+					introspect.complete();
+				} else {
+					logger.info("+++++++++++++++++ TIP Failure +++++++++++++++++");
+					introspect.fail("Invalid token");
+				}
+			});
+		} else {
+			logger.info("+++++++++++++++++ Token Not Provided +++++++++++++++++");
+			introspect.complete();
+		}
+		return introspect;
+	}
+
 	private void metrics(RoutingContext routingContext) {
 
 		if(decodeCertificate(routingContext))
@@ -629,11 +652,14 @@ public class APIServerVerticle extends AbstractVerticle {
 		validity.setHandler(validationResultHandler -> {
 
 			HttpServerResponse response = routingContext.response();
+			JsonObject requested_data = routingContext.getBodyAsJson();
+			String token = routingContext.request().getHeader("token");
 
 			if (validationResultHandler.succeeded()) {
+				if (token != null) {
+					requested_data.put("token", token);
+				}
 
-				final JsonObject requested_data = routingContext.getBodyAsJson();
-				
 				DeliveryOptions options = new DeliveryOptions();
 
 				api = "download";
@@ -646,8 +672,14 @@ public class APIServerVerticle extends AbstractVerticle {
 				metrics.put("time", new JsonObject().put("$date", nowAsISO));
 				metrics.put("ip", ip);
 
-				downloadFile(requested_data, options, response);
-
+				Future<Void> introspect = tokenintrospect(requested_data);
+				introspect.setHandler(introspectResultHandler -> {
+					if (introspectResultHandler.succeeded()) {
+						downloadFile(requested_data, options, response);
+					} else {
+						handle400(response);
+					}
+				});
 			}
 
 			else {
@@ -661,7 +693,7 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		state = 0;
 		boolean isStatus=false;
-
+		
 		if (requested_data.containsKey("id")) {
 			id = requested_data.getString("id");
 			splitId = requested_data.getString("id").split("/");
@@ -797,7 +829,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			System.out.println("STATE: " + state);
 		}return state;
 	}
-	
+
 	private void publishEvent(String event, JsonObject requested_data, DeliveryOptions options, HttpServerResponse response) {
 		
 		vertx.eventBus().request(event, requested_data, options, replyHandler -> {
