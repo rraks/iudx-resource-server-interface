@@ -6,12 +6,18 @@ import java.io.InputStream;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientOptions;
 import io.vertx.core.net.JksOptions;
 import io.vertx.ext.web.codec.BodyCodec;
+import org.apache.commons.lang3.StringUtils;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+
 
 public class AuthVerticle extends AbstractVerticle {
 
@@ -70,31 +76,46 @@ public class AuthVerticle extends AbstractVerticle {
     }
 
     private void introspect(Message<JsonObject> message) {
-        JsonObject resp = new JsonObject();
         String token = message.body().getString("token");
+        String id = message.body().getString("id");
+        logger.info("Validating token " + token);
+        logger.info("For id " + id);
 
-		logger.info("Token is : " +token);
-        logger.info("Auth url is " + url);
         client
             .post(443, url, "/auth/v1/token/introspect")
+            .ssl(true)
             .putHeader("content-type", "application/json")
-            .as(BodyCodec.jsonObject())
             .sendJsonObject(new JsonObject().put("token", token),
             ar -> {
-                logger.info("Status Code is " + ar.result().statusCode());
                 if (ar.succeeded()) {
+                    logger.info("Status code for the request is " + String.valueOf(ar.result().statusCode()));
                     if (ar.result().statusCode() == 200) {
-                        logger.info("Valid token");
-                        message.reply(resp.put("valid", true));
+                        logger.info("Got response " + ar.result().bodyAsJsonObject().encode());
+                        JsonArray validPatterns = ar.result().bodyAsJsonObject()
+                                                        .getJsonArray("request");
+                        logger.info("Got valid ids " + validPatterns.encode());
+                        int validToken = 0;
+                        for (int i = 0; i<validPatterns.size(); i++) {
+                            Pattern patObj = Pattern.compile(validPatterns.getJsonObject(i).getString("id"));
+                            if (patObj.matcher(id).matches()) validToken = 1;
+                        }
+                        if (validToken == 1 ){
+                            logger.info("Obtained valid token");
+                            message.reply(new JsonObject().put("valid", "true"));
+                        } else {
+                            /** TODO: Replace with Auth server URL */
+                            logger.info("Obtained invalid token");
+                            message.fail(0, "Fail");
+                        }
                     } else {
                         /** TODO: Replace with Auth server URL */
                         logger.info("Invalid token");
-                        message.fail(0, "Invalid token");
+                        message.fail(0, "Fail");
                     }
                 } else {
                     /** TODO: Replace with Auth server URL */
+                    message.fail(0, "Fail");
                     logger.info("Invalid token");
-                    message.fail(0, "Invalid token");
                 }
             });
 	}

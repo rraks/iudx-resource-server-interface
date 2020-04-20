@@ -14,6 +14,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
+import java.util.concurrent.CountDownLatch;
 
 @RunWith(VertxUnitRunner.class)
 public class AuthVerticleTest {
@@ -21,14 +22,15 @@ public class AuthVerticleTest {
     private static final Logger logger = LoggerFactory.getLogger(AuthVerticle.class.getName());
     private Vertx vertx;
 
+
     @Before
     public void setUp(TestContext tc) {
         vertx = Vertx.vertx();
 
         JsonObject conf = new JsonObject()
-            .put("authserver.jksfile", "config/authkeystore_example.jks")
-            .put("authserver.jkspasswd", "1!Rbccps-voc@123")
-            .put("authserver.url", "auth.iudx.org.in");
+            .put("authserver.jksfile", "somejksfile")
+            .put("authserver.jkspasswd", "somejkspasswd")
+            .put("authserver.url", "someauthserverurl");
 
         vertx.deployVerticle(AuthVerticle.class.getName(), new DeploymentOptions().setConfig(conf),
                 tc.asyncAssertSuccess());
@@ -43,19 +45,31 @@ public class AuthVerticleTest {
     @Test
     public void testValidateToken(TestContext tc) {
 
+        String tokenString = "sometoken";
+        String itemId = "someid";
         logger.info("Starting test");
+        CountDownLatch latch = new CountDownLatch(1);
 	    DeliveryOptions	options = new DeliveryOptions();
         options.addHeader("action", "token-introspect");
-        JsonObject requestedData = new JsonObject().put("token", "auth.iudx.org.in/rakshitr@iisc.ac.in/0d48e0184d690d2dd8fbe73a0b3b45e8");
+        JsonObject requestedData = new JsonObject()
+                                    .put("token", tokenString)
+                                    .put("id", itemId);
+                                
 		vertx.eventBus().request("authqueue", requestedData, options, replyHandler -> {
 			if (replyHandler.succeeded())
 			{
+                latch.countDown();
                 logger.info("Succeded test");
 				// logger.info(replyHandler.result().body().toString());
 			} else {
+                latch.countDown();
                 logger.info("Failed");
 			}
 		});
-
+        try {
+            latch.await();
+        } catch (Exception e) {
+            logger.info("Failed");
+        }
     }
 }
