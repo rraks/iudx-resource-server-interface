@@ -96,7 +96,12 @@ public class AuthVerticle extends AbstractVerticle {
                         logger.info("Got valid ids " + validPatterns.encode());
                         int validToken = 0;
                         for (int i = 0; i<validPatterns.size(); i++) {
-                            Pattern patObj = Pattern.compile(validPatterns.getJsonObject(i).getString("id"));
+                            Pattern patObj = Pattern.compile(validPatterns
+                                                                .getJsonObject(i)
+                                                                .getString("id")
+                                                                .replace("/", "\\/")
+                                                                .replace(".", "\\.")
+                                                                .replace("*", ".*"));
                             if (patObj.matcher(id).matches()) validToken = 1;
                         }
                         if (validToken == 1 ){
