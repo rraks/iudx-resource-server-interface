@@ -19,7 +19,7 @@ import java.util.Set;
 public class Connector extends AbstractVerticle {
 
 	public	final static Logger logger = LoggerFactory.getLogger(Connector.class);
-	private Set<String> items;
+	private Set<String> items, secureitems;
 	
 	public static void main(String[] args) {
 		Launcher.executeCommand("run", Connector.class.getName());
@@ -109,6 +109,7 @@ public class Connector extends AbstractVerticle {
 	private Future<Void> readItemsFile(){
 		Promise promise=Promise.promise();
 		items=new HashSet<>();
+		secureitems=new HashSet<>();
 		FileSystem vertxFileSystem = vertx.fileSystem();
 		vertxFileSystem.readFile("items.json", readFile -> {
 			if (readFile.succeeded()) {
@@ -125,7 +126,23 @@ public class Connector extends AbstractVerticle {
 				//
 				iS.setItems(items);
 				logger.info("Updated items list. Totally loaded " + items.size() + " items");
-				promise.complete();
+
+				vertxFileSystem.readFile("secureitems.json", readsecureFile -> {
+					if (readsecureFile.succeeded()) {
+						System.out.println("Read secure items file");
+						JsonArray secureitemsArray = readsecureFile.result().toJsonArray();
+
+						for(int i=0;i<secureitemsArray.size();i++) {
+							JsonObject jo = secureitemsArray.getJsonObject(i);
+							String __id = (String) jo.getString("id");
+							secureitems.add(__id);
+						}
+
+						iS.setSecureItems(secureitems);
+						logger.info("Updated items list. Totally loaded " + secureitems.size() + " secure items");
+						promise.complete();
+					}
+				});
 			}
 		});
 

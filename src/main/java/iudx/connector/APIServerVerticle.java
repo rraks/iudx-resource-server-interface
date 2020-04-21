@@ -79,6 +79,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private boolean isallowed = false;
 	private String id;
 	Set<String> items = new HashSet<String>();
+	Set<String> secureitems = new HashSet<String>();
 	Set<String> itemGroups;
 	private String resourceServerGroup;
 	private String[] group_name;
@@ -150,6 +151,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			FileSystem vertxFileSystem = vertx.fileSystem();
 			ItemsSingleton iS = ItemsSingleton.getInstance();
 			items = iS.getItems();
+			secureitems = iS.getSecureItems();
 			for (int i=0; i<allowedresourcegroups.length;i++)
 				allowedresourcegroups[i]=allowedresourcegroups[i].split(":")[0];
 			logger.info("Allowed Resource Groups: "+ allowedresourcegroups[0]);
@@ -356,9 +358,10 @@ public class APIServerVerticle extends AbstractVerticle {
 
 			validity.setHandler(validationResultHandler -> {
 
-				String token = routingContext.request().getHeader("token");
+				String token = routingContext.request().getHeader("token"); 
 
-				if (validationResultHandler.succeeded()) {
+				if (validationResultHandler.succeeded()) { 
+					logger.info("Validity  SUCCESS");
 					if (token != null) {
 						requested_data.put("token", token);
 					}
@@ -449,8 +452,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 							}
 						} else {
-							System.out.println("Failed");
-							handle400(response);
+							logger.info("Failed");
+							JsonObject authURLs = new JsonObject().put("IUDX_Auth_Server_URL", "https://auth.iudx.org.in");
+							JsonArray authResponse = new JsonArray();
+							authResponse.add(authURLs);
+							handle400(response, authResponse);
 						}
 					});
 				}
@@ -571,22 +577,28 @@ public class APIServerVerticle extends AbstractVerticle {
 	private Future<Void> tokenintrospect(JsonObject requested_data) {
 
 		Future<Void> introspect = Future.future();
-		if (requested_data.containsKey("token")) {
-		    DeliveryOptions	options = new DeliveryOptions();
-	        options.addHeader("action", "token-introspect");
+		if (secureitems.contains(requested_data.getString("id"))) { 
+			logger.info("Client requested Secure Item");
+			if (requested_data.containsKey("token")) {
+				DeliveryOptions options = new DeliveryOptions();
+				options.addHeader("action", "token-introspect");
 
-			vertx.eventBus().request("auth-queue", requested_data, options, replyHandler -> {
-				logger.info("+++++++++++++++++ Token Provided +++++++++++++++++");
-				if (replyHandler.succeeded()) {
-					logger.info("+++++++++++++++++ TIP Success +++++++++++++++++");
-					introspect.complete();
-				} else {
-					logger.info("+++++++++++++++++ TIP Failure +++++++++++++++++");
-					introspect.fail("Invalid token");
-				}
-			});
+				vertx.eventBus().request("auth-queue", requested_data, options, replyHandler -> {
+					logger.info("+++++++++++++++++ Token Provided +++++++++++++++++");
+					if (replyHandler.succeeded()) {
+						logger.info("+++++++++++++++++ TIP Success +++++++++++++++++");
+						introspect.complete();
+					} else {
+						logger.info("+++++++++++++++++ TIP Failure +++++++++++++++++");
+						introspect.fail("Invalid token");
+					}
+				});
+			} else {
+				logger.info("+++++++++++++++++ TIP Failure +++++++++++++++++");
+				introspect.fail("Token not provided");
+			}
 		} else {
-			logger.info("+++++++++++++++++ Token Not Provided +++++++++++++++++");
+			logger.info("+++++++++++++++++ Token Not Required (OPEN Dataset) +++++++++++++++++");
 			introspect.complete();
 		}
 		return introspect;
@@ -922,6 +934,11 @@ public class APIServerVerticle extends AbstractVerticle {
 
 	private void handle400(HttpServerResponse response) {
 		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end();
+		updatevalidity(metrics);
+	}
+
+	private void handle400(HttpServerResponse response, JsonArray responseArray) {
+		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end(responseArray.toString());
 		updatevalidity(metrics);
 	}
 	

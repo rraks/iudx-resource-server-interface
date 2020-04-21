@@ -7,7 +7,7 @@ import java.util.Set;
 
 public class ItemsSingleton {
 
-    Set<String> items, itemGroups;
+    Set<String> items, itemGroups, secureitems;
     public static ItemsSingleton itemsSingleton=null;
     private ItemsSingleton(){
         this.items=new HashSet<>();
@@ -20,6 +20,14 @@ public class ItemsSingleton {
 
     public void setItems(Set<String> items) {
         this.items = items;
+    }
+
+    public Set<String> getSecureItems() {
+        return secureitems;
+    }
+
+    public void setSecureItems(Set<String> secureitems) {
+        this.secureitems = secureitems;
     }
 
     public Set<String> getItemGroups() {
