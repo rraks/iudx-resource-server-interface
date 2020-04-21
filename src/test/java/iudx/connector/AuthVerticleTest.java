@@ -28,9 +28,9 @@ public class AuthVerticleTest {
         vertx = Vertx.vertx();
 
         JsonObject conf = new JsonObject()
-            .put("authserver.jksfile", "auth/authkeystore_example.jks")
-            .put("authserver.jkspasswd", "1!Rbccps-voc@123")
-            .put("authserver.url", "auth.iudx.org.in");
+            .put("authserver.jksfile", "auth/examplekeystore.jks")
+            .put("authserver.jkspasswd", "examplepassword")
+            .put("authserver.url", "example.com.example");
 
         vertx.deployVerticle(AuthVerticle.class.getName(), new DeploymentOptions().setConfig(conf),
                 tc.asyncAssertSuccess());
@@ -45,8 +45,8 @@ public class AuthVerticleTest {
     @Test
     public void testValidateToken(TestContext tc) {
 
-        String tokenString = "auth.iudx.org.in/rakshitr@iisc.ac.in/73cb438eb44fbe130999e69a19853688";
-        String itemId = "rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/example.com/b/a/c";
+        String tokenString = "exampleauthtoken";
+        String itemId = "exampleid";
         logger.info("Starting test");
         CountDownLatch latch = new CountDownLatch(1);
 	    DeliveryOptions	options = new DeliveryOptions();

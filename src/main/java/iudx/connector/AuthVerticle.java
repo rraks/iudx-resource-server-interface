@@ -1,21 +1,19 @@
 package iudx.connector;
 
+import java.util.regex.Pattern;
+
+import java.io.InputStream;
 import java.io.FileInputStream;
 import java.util.Properties;
-import java.io.InputStream;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
-import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
+import io.vertx.core.net.JksOptions;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientOptions;
-import io.vertx.core.net.JksOptions;
-import io.vertx.ext.web.codec.BodyCodec;
-import org.apache.commons.lang3.StringUtils;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
 
 
 
@@ -23,14 +21,9 @@ public class AuthVerticle extends AbstractVerticle {
 
 	private static final Logger logger = LoggerFactory.getLogger(AuthVerticle.class.getName());
 
-    private static final String AUTH_KEYSTORE_PATH = "authserver.jksfile";
-    private static final String AUTH_KEYSTORE_PASSWORD = "authserver.jkspasswd";
-    private static final String AUTH_URL = "authserver.url";
-
-
-    // Properties prop = new Properties();
-    // InputStream input = null;
-
+    private static final String AUTH_KEYSTORE_PATH = "authKeystore";
+    private static final String AUTH_KEYSTORE_PASSWORD = "authKeystorePassword";
+    private static final String AUTH_URL = "authUrl";
 
     private WebClient client;
     private String url;
@@ -40,24 +33,27 @@ public class AuthVerticle extends AbstractVerticle {
 	@Override
 	public void start() throws Exception {
         
-        // input = new FileInputStream("config.properties");
-        // prop.load(input);
-        
-        	
-        /** TODO: Use config.properties instead */
+        InputStream input = new FileInputStream("config.properties");
+		Properties prop = new Properties();
+        prop.load(input);
+
+        logger.info("JKS File path = " + prop.getProperty(AUTH_KEYSTORE_PATH));
+        logger.info("JKS File password = " + prop.getProperty(AUTH_KEYSTORE_PASSWORD));
+        logger.info("Auth URL = " + prop.getProperty(AUTH_URL));
+
         WebClientOptions options = new WebClientOptions()
                                        .setSsl(true)
                                        .setKeyStoreOptions(new JksOptions()
-                                           .setPath(config().getString(AUTH_KEYSTORE_PATH))
-                                           .setPassword(config().getString(AUTH_KEYSTORE_PASSWORD)));
+                                           .setPath(prop.getProperty(AUTH_KEYSTORE_PATH))
+                                           .setPassword(prop.getProperty(AUTH_KEYSTORE_PASSWORD)));
 
         client = WebClient.create(vertx, options);
-        url = config().getString(AUTH_URL);
+        url = prop.getProperty(AUTH_URL);
 
 		logger.info("Auth Verticle started!");
 
         /** Assume message is a json-object */
-		vertx.eventBus().consumer("authqueue", this::onMessage);
+		vertx.eventBus().consumer("auth-queue", this::onMessage);
     }
 
     private void onMessage(Message<JsonObject> message) {
@@ -97,11 +93,12 @@ public class AuthVerticle extends AbstractVerticle {
                         int validToken = 0;
                         for (int i = 0; i<validPatterns.size(); i++) {
                             Pattern patObj = Pattern.compile(validPatterns
-                                                                .getJsonObject(i)
-                                                                .getString("id")
-                                                                .replace("/", "\\/")
-                                                                .replace(".", "\\.")
-                                                                .replace("*", ".*"));
+                                    .getJsonObject(i)
+                                    .getString("id")
+                                    .replace("/", "\\/")
+                                    .replace(".", "\\.")
+                                    .replace("*", ".*"));
+
                             if (patObj.matcher(id).matches()) validToken = 1;
                         }
                         if (validToken == 1 ){

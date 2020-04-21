@@ -572,8 +572,10 @@ public class APIServerVerticle extends AbstractVerticle {
 
 		Future<Void> introspect = Future.future();
 		if (requested_data.containsKey("token")) {
+		    DeliveryOptions	options = new DeliveryOptions();
+	        options.addHeader("action", "token-introspect");
 
-			vertx.eventBus().request("token-introspect", requested_data, replyHandler -> {
+			vertx.eventBus().request("auth-queue", requested_data, options, replyHandler -> {
 				logger.info("+++++++++++++++++ Token Provided +++++++++++++++++");
 				if (replyHandler.succeeded()) {
 					logger.info("+++++++++++++++++ TIP Success +++++++++++++++++");
