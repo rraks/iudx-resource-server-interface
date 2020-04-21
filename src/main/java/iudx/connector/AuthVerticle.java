@@ -2,6 +2,9 @@ package iudx.connector;
 
 import java.util.regex.Pattern;
 
+import java.io.InputStream;
+import java.io.FileInputStream;
+import java.util.Properties;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
@@ -18,14 +21,9 @@ public class AuthVerticle extends AbstractVerticle {
 
 	private static final Logger logger = LoggerFactory.getLogger(AuthVerticle.class.getName());
 
-    private static final String AUTH_KEYSTORE_PATH = "authkeystore_example.jks";
-    private static final String AUTH_KEYSTORE_PASSWORD = "authserver.jkspasswd";
-    private static final String AUTH_URL = "auth.iudx.org.in";
-
-
-    // Properties prop = new Properties();
-    // InputStream input = null;
-
+    private static final String AUTH_KEYSTORE_PATH = "authKeystore";
+    private static final String AUTH_KEYSTORE_PASSWORD = "authKeystorePassword";
+    private static final String AUTH_URL = "authUrl";
 
     private WebClient client;
     private String url;
@@ -35,20 +33,22 @@ public class AuthVerticle extends AbstractVerticle {
 	@Override
 	public void start() throws Exception {
         
-        // input = new FileInputStream("config.properties");
-        // prop.load(input);
-        
-        	
-        /** TODO: Use config.properties instead */
+        InputStream input = new FileInputStream("config.properties");
+		Properties prop = new Properties();
+        prop.load(input);
+
+        logger.info("JKS File path = " + prop.getProperty(AUTH_KEYSTORE_PATH));
+        logger.info("JKS File password = " + prop.getProperty(AUTH_KEYSTORE_PASSWORD));
+        logger.info("Auth URL = " + prop.getProperty(AUTH_URL));
+
         WebClientOptions options = new WebClientOptions()
                                        .setSsl(true)
                                        .setKeyStoreOptions(new JksOptions()
-                                           .setPath("authkeystore_example.jks")
-                                           .setPassword("1!Rbccps-voc@123"));
+                                           .setPath(prop.getProperty(AUTH_KEYSTORE_PATH))
+                                           .setPassword(prop.getProperty(AUTH_KEYSTORE_PASSWORD)));
 
         client = WebClient.create(vertx, options);
-        url = "auth.iudx.org.in"; // config().getString(AUTH_URL);
-
+        url = prop.getProperty(AUTH_URL);
 		logger.info("Auth Verticle started!");
 
         /** Assume message is a json-object */
