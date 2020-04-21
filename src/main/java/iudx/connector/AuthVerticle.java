@@ -49,7 +49,6 @@ public class AuthVerticle extends AbstractVerticle {
 
         client = WebClient.create(vertx, options);
         url = prop.getProperty(AUTH_URL);
-
 		logger.info("Auth Verticle started!");
 
         /** Assume message is a json-object */
