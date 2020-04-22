@@ -72,12 +72,12 @@ public class AuthVerticle extends AbstractVerticle {
 
     private void introspect(Message<JsonObject> message) {
         String token = message.body().getString("token");
+        String serverToken = message.body().getString("server-token");
         String id = message.body().getString("id");
 
-        String serverToken = message.body().getString("server-token");
 
-	if (serverToken == null)
-		serverToken = "true";
+        if (serverToken == null)
+            serverToken = "true";
 
         logger.info("Validating token " + token);
         logger.info("For id " + id);
@@ -115,17 +115,14 @@ public class AuthVerticle extends AbstractVerticle {
                             logger.info("Obtained valid token");
                             message.reply(new JsonObject().put("valid", "true"));
                         } else {
-                            /** TODO: Replace with Auth server URL */
                             logger.info("Obtained invalid token");
                             message.fail(0, "Fail");
                         }
                     } else {
-                        /** TODO: Replace with Auth server URL */
                         logger.info("Invalid token");
                         message.fail(0, "Fail");
                     }
                 } else {
-                    /** TODO: Replace with Auth server URL */
                     message.fail(0, "Fail");
                     logger.info("Invalid token");
                 }
