@@ -6,7 +6,14 @@ import java.io.InputStream;
 import java.security.Principal;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -14,7 +21,6 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
-import io.vertx.core.Launcher;
 import io.vertx.core.MultiMap;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.file.FileSystem;
@@ -25,7 +31,6 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JksOptions;
@@ -453,10 +458,10 @@ public class APIServerVerticle extends AbstractVerticle {
 							}
 						} else {
 							logger.info("Failed");
-							JsonObject authURLs = new JsonObject().put("IUDX_Auth_Server_URL", "https://auth.iudx.org.in");
-							JsonArray authResponse = new JsonArray();
-							authResponse.add(authURLs);
-							handle400(response, authResponse);
+							JsonArray array = new JsonArray();
+							array.add("https://auth.iudx.org.in");
+							JsonObject authURLs = new JsonObject().put("IUDX_Auth_Server_URL", array); 
+							handle403(response, authURLs);
 						}
 					});
 				}
@@ -561,7 +566,11 @@ public class APIServerVerticle extends AbstractVerticle {
 								break;
 							}
 						} else {
-							handle400(response);
+							logger.info("Failed");
+							JsonArray array = new JsonArray();
+							array.add("https://auth.iudx.org.in");
+							JsonObject authURLs = new JsonObject().put("IUDX_Auth_Server_URL", array); 
+							handle403(response, authURLs);
 						}
 					});
 				}
@@ -691,7 +700,11 @@ public class APIServerVerticle extends AbstractVerticle {
 					if (introspectResultHandler.succeeded()) {
 						downloadFile(requested_data, options, response);
 					} else {
-						handle400(response);
+						logger.info("Failed");
+						JsonArray array = new JsonArray();
+						array.add("https://auth.iudx.org.in");
+						JsonObject authURLs = new JsonObject().put("IUDX_Auth_Server_URL", array); 
+						handle403(response, authURLs);
 					}
 				});
 			}
@@ -937,8 +950,8 @@ public class APIServerVerticle extends AbstractVerticle {
 		updatevalidity(metrics);
 	}
 
-	private void handle400(HttpServerResponse response, JsonArray responseArray) {
-		response.setStatusCode(400).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end(responseArray.toString());
+	private void handle403(HttpServerResponse response, JsonObject responseObject) {
+		response.setStatusCode(403).putHeader(HttpHeaders.CONTENT_TYPE.toString(), "application/json").end(responseObject.toString());
 		updatevalidity(metrics);
 	}
 	
