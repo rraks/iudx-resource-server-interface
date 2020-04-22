@@ -73,14 +73,25 @@ public class AuthVerticle extends AbstractVerticle {
     private void introspect(Message<JsonObject> message) {
         String token = message.body().getString("token");
         String id = message.body().getString("id");
+
+        String serverToken = message.body().getString("server-token");
+
+	if (serverToken == null)
+		serverToken = "true";
+
         logger.info("Validating token " + token);
         logger.info("For id " + id);
+        logger.info("For server-token " + serverToken);
+
+        JsonObject tokenObject = new JsonObject()
+					.put("token", token)
+					.put("server-token",serverToken);
 
         client
             .post(443, url, "/auth/v1/token/introspect")
             .ssl(true)
             .putHeader("content-type", "application/json")
-            .sendJsonObject(new JsonObject().put("token", token),
+            .sendJsonObject(tokenObject,
             ar -> {
                 if (ar.succeeded()) {
                     logger.info("Status code for the request is " + String.valueOf(ar.result().statusCode()));
